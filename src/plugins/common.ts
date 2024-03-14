@@ -1,0 +1,18 @@
+import { Breadcrumb } from "../core/breadcrumb";
+import { Global } from "../core/global";
+import { ReportDataController } from "../core/report";
+
+export abstract class ReplacePlugin {
+  replace(): void {}
+}
+export enum HTTP_TYPE {
+  XHR = "xhr",
+  FETCH = "fetch",
+}
+
+export interface IPluginParams {
+  breadcrumb: Breadcrumb;
+  options: IOptionsParams;
+  global: Global;
+  reportData: ReportDataController;
+}
