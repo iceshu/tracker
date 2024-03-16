@@ -162,6 +162,7 @@ export interface BreadcrumbData {
   status: STATUS_CODE; // 行为状态
   time: number; // 发生时间
   data: any;
+  level?: string; // 用户行为等级
 }
 
 export interface ErrorTarget {

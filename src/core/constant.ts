@@ -17,6 +17,7 @@ export enum EVENT_TYPE {
   PERFORMANCE = "performance",
   RECORDSCREEN = "recordScreen",
   WHITESCREEN = "whiteScreen",
+  CONSOLE = "console",
 }
 export enum BREADCRUMB_TYPE {
   HTTP = "Http",
@@ -25,6 +26,7 @@ export enum BREADCRUMB_TYPE {
   CODEERROR = "Code_Error",
   ROUTE = "Route",
   CUSTOM = "Custom",
+  CONSOLE = "console",
 }
 export enum STATUS_CODE {
   ERROR = "error",

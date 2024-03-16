@@ -10,13 +10,12 @@ import {
 } from "../utils";
 import { IPluginParams, ReplacePlugin } from "./common";
 
-export class DomPlugin extends ReplacePlugin {
+export class DomPlugin {
   global: Global;
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
   constructor(params: IPluginParams) {
-    super();
     const { global, options, breadcrumb, reportData } = params;
     this.global = global;
     this.options = options;

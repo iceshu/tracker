@@ -3,7 +3,12 @@ import { EVENT_TYPE, STATUS_CODE } from "../core/constant";
 import { Global, global } from "../core/global";
 import { ReportDataController } from "../core/report";
 import { ErrorTarget, ResourceError, ResourceTarget } from "../core/typing";
-import { addEventListenerTo, getTimestamp } from "../utils";
+import {
+  addEventListenerTo,
+  getTimestamp,
+  isString,
+  isUndefined,
+} from "../utils";
 import ErrorStackParser from "error-stack-parser";
 import { IPluginParams } from "./common";
 
@@ -19,19 +24,32 @@ export class ErrorPlugin {
     this.breadcrumb = breadcrumb;
     this.reportData = reportData;
     this.listenError();
+    this.setup();
+  }
+  setup() {
+    this.listenError();
+    this.listenUnHandledRejection();
   }
   listenError(): void {
     addEventListenerTo(
       this.global._global,
-      "error",
-      (e) => {
-        debugger;
-        console.log(e);
+      EVENT_TYPE.ERROR,
+      (e: any) => {
+        this.handleError(e);
       },
       true
     );
   }
-  handleData(data: any) {}
+  listenUnHandledRejection() {
+    addEventListenerTo(
+      this.global._global,
+      EVENT_TYPE.UNHANDLEDREJECTION,
+      (e: any) => {
+        this.handleUnhandledRejection(e);
+      },
+      true
+    );
+  }
 
   handleError(ev: ErrorTarget): any {
     const target = ev.target;
@@ -85,6 +103,32 @@ export class ErrorPlugin {
       });
     }
   }
+  handleUnhandledRejection(ev: PromiseRejectionEvent): void {
+    const stackFrame = ErrorStackParser.parse(ev.reason)[0];
+    const { fileName, columnNumber, lineNumber } = stackFrame;
+    const message = unknownToString(ev.reason.message || ev.reason.stack);
+    const data = {
+      type: EVENT_TYPE.UNHANDLEDREJECTION,
+      status: STATUS_CODE.ERROR,
+      time: getTimestamp(),
+      message,
+      fileName,
+      line: lineNumber,
+      column: columnNumber,
+    };
+
+    this.breadcrumb.push({
+      type: EVENT_TYPE.UNHANDLEDREJECTION,
+      category: this.breadcrumb.getCategory(EVENT_TYPE.UNHANDLEDREJECTION),
+      time: getTimestamp(),
+      status: STATUS_CODE.ERROR,
+      data,
+    });
+    const hash: string = getErrorUid(
+      `${EVENT_TYPE.UNHANDLEDREJECTION}-${message}-${fileName}-${columnNumber}`
+    );
+    // 开启repeatCodeError第一次报错才上报
+  }
 }
 
 function getErrorUid(str: string): string {
@@ -122,4 +166,13 @@ export function interceptStr(str: string, interceptLength: number): string {
     );
   }
   return "";
+}
+export function unknownToString(target: unknown): string {
+  if (isString(target)) {
+    return target as string;
+  }
+  if (isUndefined(target)) {
+    return "undefined";
+  }
+  return JSON.stringify(target);
 }

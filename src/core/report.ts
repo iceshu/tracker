@@ -4,6 +4,7 @@ import { generateUUID, getLocationHref, isEmpty } from "../utils";
 import { EVENT_TYPE } from "./constant";
 import { Breadcrumb } from "./breadcrumb";
 import { ReportData } from "./typing";
+import { IPluginParams } from "../plugins/common";
 export class ReportDataController {
   queue: Queue = new Queue(global); // 消息队列
   apikey = ""; // 每个项目对应的唯一标识
@@ -14,8 +15,14 @@ export class ReportDataController {
   getUserId: any; // 用户自定义获取userId的方法
   useImgUpload = false; // 是否使用图片打点上报
   recordScreenId: any;
-  constructor(private options: IOptionsParams, private breadcrumb: Breadcrumb) {
-    this.uuid = generateUUID(); // 每次页面加载的唯一标识
+  breadcrumb: Breadcrumb;
+  options: IOptionsParams;
+  constructor(params: Omit<IPluginParams, "reportData">) {
+    const { options, breadcrumb } = params;
+    this.breadcrumb = breadcrumb;
+    this.uuid = generateUUID();
+    this.errorDsn = options.dns;
+    this.options = options;
   }
   beacon(url: string, data: any): boolean {
     return navigator.sendBeacon(url, JSON.stringify(data));

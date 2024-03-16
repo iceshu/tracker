@@ -19,7 +19,6 @@ export class Breadcrumb {
    */
   push(data: BreadcrumbData): void {
     if (typeof this.beforePushBreadcrumb === "function") {
-      // 执行用户自定义的hook
       const result = this.beforePushBreadcrumb(data) as BreadcrumbData;
       if (!result) return;
       this.immediatePush(result);
@@ -33,7 +32,6 @@ export class Breadcrumb {
       this.shift();
     }
     this.stack.push(data);
-    console.log(this.stack);
 
     this.stack.sort((a, b) => a.time - b.time);
   }
@@ -71,6 +69,8 @@ export class Breadcrumb {
       case EVENT_TYPE.ERROR:
         return BREADCRUMB_TYPE.CODEERROR;
 
+      case EVENT_TYPE.CONSOLE:
+        return BREADCRUMB_TYPE.CONSOLE;
       // 用户自定义
       default:
         return BREADCRUMB_TYPE.CUSTOM;

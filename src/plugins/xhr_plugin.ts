@@ -6,18 +6,20 @@ import { HttpData } from "../core/typing";
 import { addEventListenerTo, fromHttpStatus, getTimestamp } from "../utils";
 import { HTTP_TYPE, IPluginParams } from "./common";
 import { ReplacePlugin } from "./common";
-class XhrPlugin extends ReplacePlugin {
+class XhrPlugin {
   global: Global;
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
   constructor(params: IPluginParams) {
-    super();
     const { global, options, breadcrumb, reportData } = params;
     this.global = global;
     this.options = options;
     this.breadcrumb = breadcrumb;
     this.reportData = reportData;
+    this.setup();
+  }
+  setup() {
     this.replaceXhr();
     this.replaceFetch();
   }
@@ -145,7 +147,7 @@ class XhrPlugin extends ReplacePlugin {
       const result = this.handleTransForm(xhrData);
       const category = this.breadcrumb.getCategory(xhrData.type! as EVENT_TYPE);
       this.breadcrumb.push({
-        type: EVENT_TYPE.XHR,
+        type: EVENT_TYPE.FETCH,
         category,
         data: result,
         time: xhrData.time,

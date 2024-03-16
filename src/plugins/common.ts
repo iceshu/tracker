@@ -3,7 +3,8 @@ import { Global } from "../core/global";
 import { ReportDataController } from "../core/report";
 
 export abstract class ReplacePlugin {
-  replace(): void {}
+  abstract replace(): void;
+  abstract setup(): void;
 }
 export enum HTTP_TYPE {
   XHR = "xhr",

@@ -5,13 +5,12 @@ import { ReportDataController } from "../core/report";
 import { getLocationHref, getTimestamp, parseUrlToObj } from "../utils";
 import { IPluginParams, ReplacePlugin } from "./common";
 
-export class HistoryPlugin extends ReplacePlugin {
+export class HistoryPlugin {
   global: Global;
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
   constructor(params: IPluginParams) {
-    super();
     const { global, options, breadcrumb, reportData } = params;
     this.global = global;
     this.options = options;
