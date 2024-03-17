@@ -1,6 +1,6 @@
 import { Breadcrumb } from "../core/breadcrumb";
 import { EVENT_TYPE, STATUS_CODE } from "../core/constant";
-import { Global, global } from "../core/global";
+import { Global, _global, global } from "../core/global";
 import { ReportDataController } from "../core/report";
 import { ErrorTarget, ResourceError, ResourceTarget } from "../core/typing";
 import {
@@ -32,7 +32,7 @@ export class ErrorPlugin {
   }
   listenError(): void {
     addEventListenerTo(
-      this.global._global,
+      _global,
       EVENT_TYPE.ERROR,
       (e: any) => {
         this.handleError(e);
@@ -42,7 +42,7 @@ export class ErrorPlugin {
   }
   listenUnHandledRejection() {
     addEventListenerTo(
-      this.global._global,
+      _global,
       EVENT_TYPE.UNHANDLEDREJECTION,
       (e: any) => {
         this.handleUnhandledRejection(e);

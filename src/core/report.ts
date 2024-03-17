@@ -6,9 +6,9 @@ import { Breadcrumb } from "./breadcrumb";
 import { ReportData } from "./typing";
 import { IPluginParams } from "../plugins/common";
 export class ReportDataController {
-  queue: Queue = new Queue(global); // 消息队列
+  queue: Queue = new Queue(); // 消息队列
   apikey = ""; // 每个项目对应的唯一标识
-  errorDsn = ""; // 监控上报接口的地址
+  dns = ""; // 监控上报接口的地址
   userId = ""; // 用户id
   uuid: string; // 每次页面加载的唯一标识
   beforeDataReport: any; // 上报数据前的hook
@@ -21,8 +21,10 @@ export class ReportDataController {
     const { options, breadcrumb } = params;
     this.breadcrumb = breadcrumb;
     this.uuid = generateUUID();
-    this.errorDsn = options.dns;
+    this.dns = options.dns;
+    this.apikey = options?.apikey;
     this.options = options;
+    this.beforeDataReport = options?.beforeDataReport;
   }
   beacon(url: string, data: any): boolean {
     return navigator.sendBeacon(url, JSON.stringify(data));
@@ -87,7 +89,7 @@ export class ReportDataController {
   getTransportData(data: any): ReportData {
     const info = {
       ...data,
-      ...this.getAuthInfo(), // 获取用户信息
+      userInfo: this.getAuthInfo(), // 获取用户信息
       uuid: this.uuid,
       pageUrl: getLocationHref(),
       deviceInfo: global.deviceInfo, // 获取设备信息
@@ -107,7 +109,7 @@ export class ReportDataController {
   // 判断请求是否为SDK配置的接口
   isSdkTransportUrl(targetUrl: string): boolean {
     let isSdkDsn = false;
-    if (this.errorDsn && targetUrl.indexOf(this.errorDsn) !== -1) {
+    if (this.dns && targetUrl.indexOf(this.dns) !== -1) {
       isSdkDsn = true;
     }
     return isSdkDsn;
@@ -120,19 +122,12 @@ export class ReportDataController {
   }
   // 上报数据
   async send(data: any) {
-    const dsn = this.errorDsn;
+    const dsn = this.dns;
     if (isEmpty(dsn)) {
       console.error("dsn为空，没有传入监控错误上报的dsn地址，请在init中传入");
       return;
     }
-    // 开启录屏，由@websee/recordScreen 插件控制
-    // if (this.options.silentRecordScreen) {
-    //   if (this.options.recordScreenTypeList.includes(data.type)) {
-    //     // 修改hasError
-    //     _support.hasError = true;
-    //     data.recordScreenId = _support.recordScreenId;
-    //   }
-    // }
+
     const result = (await this.beforePost(data)) as ReportData;
     if (result) {
       // 优先使用sendBeacon 上报，若数据量大，再使用图片打点上报和fetch上报

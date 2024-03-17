@@ -19,7 +19,8 @@ const defaultPlugins = [
 ];
 const GLOBAL: any = window;
 export const TrackInit = (options: IOptionsParams) => {
-  const { maxBreadcrumbs = 20, beforePushBreadcrumb, dns } = options;
+  global.version = options?.version;
+  const { maxBreadcrumbs = 20, beforePushBreadcrumb } = options;
   const breadcrumb = new Breadcrumb(maxBreadcrumbs, beforePushBreadcrumb);
   const reportDataController = new ReportDataController({
     breadcrumb,

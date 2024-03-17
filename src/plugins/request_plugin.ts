@@ -1,6 +1,6 @@
 import { Breadcrumb } from "../core/breadcrumb";
 import { EMethods, EVENT_TYPE, HTTP_CODE, STATUS_CODE } from "../core/constant";
-import { Global } from "../core/global";
+import { Global, _global } from "../core/global";
 import { ReportDataController } from "../core/report";
 import { HttpData } from "../core/typing";
 import { addEventListenerTo, fromHttpStatus, getTimestamp } from "../utils";
@@ -23,12 +23,12 @@ class XhrPlugin {
     this.replaceFetch();
   }
   replaceXhr(): void {
-    if (!("XMLHttpRequest" in this.global._global)) {
+    if (!("XMLHttpRequest" in _global)) {
       return;
     }
     const that = this;
 
-    const proxyObj = new Proxy(this.global._global.XMLHttpRequest, {
+    const proxyObj = new Proxy(_global.XMLHttpRequest, {
       construct(target: any, args: any[]) {
         const xhr = new target(...args);
         return new Proxy(xhr, {
@@ -73,7 +73,7 @@ class XhrPlugin {
         });
       },
     });
-    this.global._global.XMLHttpRequest = proxyObj;
+    _global.XMLHttpRequest = proxyObj;
   }
   replaceFetch() {
     const { _global } = this.global;

@@ -1,6 +1,6 @@
 import { Breadcrumb } from "../core/breadcrumb";
 import { EVENT_TYPE, STATUS_CODE } from "../core/constant";
-import { Global } from "../core/global";
+import { Global, _global } from "../core/global";
 import { ReportDataController } from "../core/report";
 import { getLocationHref, getTimestamp, parseUrlToObj } from "../utils";
 import { IPluginParams, ReplacePlugin } from "./common";
@@ -22,9 +22,9 @@ export class HistoryPlugin {
     if (!supportsHistory()) {
       return;
     }
-    const history = this.global._global.history;
-    const oldOnpopstate = this.global._global.onpopstate;
-    this.global._global.onpopstate = (...args: any[]) => {
+    const history = _global.history;
+    const oldOnpopstate = _global.onpopstate;
+    _global.onpopstate = (...args: any[]) => {
       const to = getLocationHref();
       const from = lastHref;
       lastHref = to;
@@ -32,7 +32,7 @@ export class HistoryPlugin {
         from,
         to,
       });
-      oldOnpopstate && oldOnpopstate.apply(this.global._global, args);
+      oldOnpopstate && oldOnpopstate.apply(_global, args as any);
     };
     const historyProxy = new Proxy(history, {
       get: (target, prop, receiver) => {
@@ -56,14 +56,12 @@ export class HistoryPlugin {
         return Reflect.get(target, prop, receiver);
       },
     });
-    Object.defineProperty(this.global._global, "history", {
+    Object.defineProperty(_global, "history", {
       value: historyProxy,
     });
   }
   supportHistory() {
-    return !!(
-      this.global._global.history && this.global._global.history.pushState
-    );
+    return !!(_global.history && _global.history.pushState);
   }
   handleData(data: any) {
     const { from, to } = data;

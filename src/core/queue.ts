@@ -1,11 +1,11 @@
-import { Global, global } from "./global";
+import { _global } from "./global";
 import { voidFun } from "./typing";
 export class Queue {
   private static instance: Queue;
   private stack: Function[];
   private isFlushing: boolean;
 
-  constructor(private global: Global) {
+  constructor() {
     this.stack = [];
     this.isFlushing = false;
 
@@ -14,14 +14,13 @@ export class Queue {
 
   static getInstance(): Queue {
     if (!Queue.instance) {
-      Queue.instance = new Queue(global);
+      Queue.instance = new Queue();
     }
     return Queue.instance;
   }
 
   // 添加方法到队列
   addFn(fn: voidFun): void {
-    const _global = this.global._global;
     if (typeof fn !== "function") return;
     if (!("requestIdleCallback" in _global || "Promise" in _global)) {
       fn();

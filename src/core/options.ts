@@ -1,5 +1,7 @@
 interface IOptionsParams {
   dns: string;
-  [key: string]: any;
+  version?: string;
   filterXhrUrlRegExp?: RegExp;
+  [key: string]: any;
+  beforeDataReport: (T: any) => any;
 }

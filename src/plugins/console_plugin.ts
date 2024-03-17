@@ -1,7 +1,7 @@
 import { Breadcrumb } from "../core/breadcrumb";
 import { ReportDataController } from "../core/report";
 import { IPluginParams } from "./common";
-import { Global, global } from "../core/global";
+import { Global, _global, global } from "../core/global";
 import { EVENT_TYPE, STATUS_CODE } from "../core/constant";
 import { getTimestamp } from "../utils";
 
@@ -36,7 +36,6 @@ export class ConsolePlugin {
     });
   }
   replace() {
-    const _global = this.global._global;
     if (!("console" in _global)) {
       return;
     }
