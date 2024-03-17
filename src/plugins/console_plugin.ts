@@ -1,12 +1,11 @@
 import { Breadcrumb } from "../core/breadcrumb";
 import { ReportDataController } from "../core/report";
 import { IPluginParams } from "./common";
-import { Global, _global, global } from "../core/global";
+import { Global, _global } from "../core/global";
 import { EVENT_TYPE, STATUS_CODE } from "../core/constant";
 import { getTimestamp } from "../utils";
 
 export class ConsolePlugin {
-  global: Global;
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
@@ -14,7 +13,6 @@ export class ConsolePlugin {
 
   constructor(params: IPluginParams) {
     const { global, options, breadcrumb, reportData } = params;
-    this.global = global;
     this.options = options;
     this.breadcrumb = breadcrumb;
     this.reportData = reportData;

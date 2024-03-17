@@ -1,6 +1,6 @@
 import { Breadcrumb } from "../core/breadcrumb";
 import { EVENT_TYPE, STATUS_CODE } from "../core/constant";
-import { Global, _global, global } from "../core/global";
+import { Global, _global } from "../core/global";
 import { ReportDataController } from "../core/report";
 import { ErrorTarget, ResourceError, ResourceTarget } from "../core/typing";
 import {
@@ -13,13 +13,12 @@ import ErrorStackParser from "error-stack-parser";
 import { IPluginParams } from "./common";
 
 export class ErrorPlugin {
-  global: Global;
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
+  errorMap: WeakMap<any, any> = new WeakMap();
   constructor(params: IPluginParams) {
-    const { global, options, breadcrumb, reportData } = params;
-    this.global = global;
+    const { options, breadcrumb, reportData } = params;
     this.options = options;
     this.breadcrumb = breadcrumb;
     this.reportData = reportData;
@@ -79,7 +78,7 @@ export class ErrorPlugin {
       // 开启repeatCodeError第一次报错才上报
       if (
         !this.options.repeatCodeError ||
-        (this.options.repeatCodeError && !hashMapExist(hash))
+        (this.options.repeatCodeError && !this.hashMapExist(hash))
       ) {
         return this.reportData.send(errorData as any);
       }
@@ -102,6 +101,13 @@ export class ErrorPlugin {
         status: STATUS_CODE.ERROR,
       });
     }
+  }
+  hashMapExist(hash: string): boolean {
+    const exist = this.errorMap?.has(hash);
+    if (!exist) {
+      this.errorMap?.set(hash, true);
+    }
+    return exist;
   }
   handleUnhandledRejection(ev: PromiseRejectionEvent): void {
     const stackFrame = ErrorStackParser.parse(ev.reason)[0];
@@ -142,13 +148,7 @@ function getErrorUid(str: string): string {
   }
   return `${hash}`;
 }
-function hashMapExist(hash: string): boolean {
-  const exist = global.errorMap?.has(hash);
-  if (!exist) {
-    global.errorMap?.set(hash, true);
-  }
-  return exist;
-}
+
 export function resourceTransform(target: ResourceTarget): ResourceError {
   return {
     time: getTimestamp(),

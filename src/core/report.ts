@@ -91,6 +91,7 @@ export class ReportDataController {
       ...data,
       userInfo: this.getAuthInfo(), // 获取用户信息
       uuid: this.uuid,
+      releaseVersion: global.options?.version,
       pageUrl: getLocationHref(),
       deviceInfo: global.deviceInfo, // 获取设备信息
     };

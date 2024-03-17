@@ -1,12 +1,19 @@
+import { Breadcrumb } from "./breadcrumb";
+import { ReportDataController } from "./report";
+
 export const _global = window;
 export class Global {
   _global: any;
   deviceInfo: any;
-  errorMap: WeakMap<any, any> = new WeakMap();
-  version?: string;
+  breadcrumb?: Breadcrumb;
+  reportData?: ReportDataController;
+  options?: IOptionsParams;
   constructor() {
     this.setup();
   }
   setup() {}
+  log(data: any) {
+    this.reportData?.send(data);
+  }
 }
 export const global = new Global();

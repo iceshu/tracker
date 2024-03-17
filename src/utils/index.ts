@@ -53,3 +53,9 @@ export function isString(value: any): value is string {
 export function isUndefined(value: any): value is undefined {
   return typeof value === "undefined";
 }
+export const readonly = (rawObject: any) =>
+  new Proxy(rawObject, {
+    set(target, prop, value) {
+      throw new Error(`Property '${String(prop)}' is read-only`);
+    },
+  });

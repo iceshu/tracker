@@ -9,6 +9,7 @@ import {
   PerformancePlugin,
 } from "./plugins";
 import { ReportDataController } from "./core/report";
+import { readonly } from "./utils";
 const defaultPlugins = [
   RequestPlugin,
   DomPlugin,
@@ -18,8 +19,9 @@ const defaultPlugins = [
   PerformancePlugin,
 ];
 const GLOBAL: any = window;
-export const TrackInit = (options: IOptionsParams) => {
-  global.version = options?.version;
+export const TrackInit = (rawOptions: IOptionsParams) => {
+  const options = readonly(rawOptions);
+  global.options = options;
   const { maxBreadcrumbs = 20, beforePushBreadcrumb } = options;
   const breadcrumb = new Breadcrumb(maxBreadcrumbs, beforePushBreadcrumb);
   const reportDataController = new ReportDataController({
@@ -27,6 +29,8 @@ export const TrackInit = (options: IOptionsParams) => {
     options,
     global,
   });
+  global.breadcrumb = breadcrumb;
+  global.reportData = reportDataController;
   const PluginPrams = {
     breadcrumb,
     options,
@@ -36,14 +40,6 @@ export const TrackInit = (options: IOptionsParams) => {
   defaultPlugins.forEach((Plugin) => {
     new Plugin(PluginPrams);
   });
-  GLOBAL.__TRACK__ = {
-    breadcrumb,
-    options,
-    global,
-    reportData: reportDataController,
-  };
-  return {
-    reportData: reportDataController,
-    breadcrumb,
-  };
+  GLOBAL.__TRACK__ = PluginPrams;
+  return global;
 };
