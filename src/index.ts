@@ -6,6 +6,7 @@ import {
   ConsolePlugin,
   HistoryPlugin,
   ErrorPlugin,
+  PerformancePlugin,
 } from "./plugins";
 import { ReportDataController } from "./core/report";
 const defaultPlugins = [
@@ -14,7 +15,9 @@ const defaultPlugins = [
   HistoryPlugin,
   ErrorPlugin,
   ConsolePlugin,
+  PerformancePlugin,
 ];
+const GLOBAL: any = window;
 export const TrackInit = (options: IOptionsParams) => {
   const { maxBreadcrumbs = 20, beforePushBreadcrumb, dns } = options;
   const breadcrumb = new Breadcrumb(maxBreadcrumbs, beforePushBreadcrumb);
@@ -32,5 +35,14 @@ export const TrackInit = (options: IOptionsParams) => {
   defaultPlugins.forEach((Plugin) => {
     new Plugin(PluginPrams);
   });
-  return {};
+  GLOBAL.__TRACK__ = {
+    breadcrumb,
+    options,
+    global,
+    reportData: reportDataController,
+  };
+  return {
+    reportData: reportDataController,
+    breadcrumb,
+  };
 };

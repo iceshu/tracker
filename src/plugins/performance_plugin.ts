@@ -1,24 +1,13 @@
-import {
-  onLCP,
-  onFID,
-  onCLS,
-  onFCP,
-  onTTFB,
-  getFID,
-  getCLS,
-  getFCP,
-  getLCP,
-  getTTFB,
-} from "web-vitals";
+import { onLCP, onFID, onCLS, onFCP, onTTFB } from "web-vitals";
 import { EVENT_TYPE, STATUS_CODE } from "../core/constant";
 import { Breadcrumb } from "../core/breadcrumb";
 import { ReportDataController } from "../core/report";
 import { IPluginParams } from "./common";
 import { Global } from "../core/global";
-import { BasePlugin, Callback, SdkBase } from "../core/typing";
+import { Callback } from "../core/typing";
 import { addEventListenerTo, getTimestamp } from "../utils";
 
-class PerformancePlugin {
+export class PerformancePlugin {
   name = EVENT_TYPE.PERFORMANCE;
   global: Global;
   options: IOptionsParams;
