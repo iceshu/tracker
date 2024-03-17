@@ -21,7 +21,6 @@ const defaultPlugins = [
 const GLOBAL: any = window;
 export const TrackInit = (rawOptions: IOptionsParams) => {
   const options = readonly(rawOptions);
-  global.options = options;
   const { maxBreadcrumbs = 20, beforePushBreadcrumb } = options;
   const breadcrumb = new Breadcrumb(maxBreadcrumbs, beforePushBreadcrumb);
   const reportDataController = new ReportDataController({
@@ -29,6 +28,7 @@ export const TrackInit = (rawOptions: IOptionsParams) => {
     options,
     global,
   });
+  global.options = options;
   global.breadcrumb = breadcrumb;
   global.reportData = reportDataController;
   const PluginPrams = {
