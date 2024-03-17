@@ -5,7 +5,6 @@ import { ReportDataController } from "../core/report";
 import { HttpData } from "../core/typing";
 import { addEventListenerTo, fromHttpStatus, getTimestamp } from "../utils";
 import { HTTP_TYPE, IPluginParams } from "./common";
-import { ReplacePlugin } from "./common";
 class XhrPlugin {
   global: Global;
   options: IOptionsParams;

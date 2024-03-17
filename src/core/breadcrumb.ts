@@ -15,16 +15,13 @@ export class Breadcrumb {
     this.stack = [];
   }
   /**
-   * 添加用户行为栈
+   * Pushes a breadcrumb to the breadcrumb stack.
    */
   push(data: BreadcrumbData): void {
-    if (typeof this.beforePushBreadcrumb === "function") {
-      const result = this.beforePushBreadcrumb(data) as BreadcrumbData;
-      if (!result) return;
-      this.immediatePush(result);
-      return;
+    const prepared = this.beforePushCallback?.(data) || data;
+    if (prepared) {
+      this.immediatePush(prepared);
     }
-    this.immediatePush(data);
   }
   immediatePush(data: BreadcrumbData): void {
     data.time || (data.time = getTimestamp());
@@ -33,7 +30,7 @@ export class Breadcrumb {
     }
     this.stack.push(data);
 
-    this.stack.sort((a, b) => a.time - b.time);
+    this.stack.sort((a, b) => a.time! - b.time!);
   }
   shift(): boolean {
     return this.stack.shift() !== undefined;

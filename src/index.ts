@@ -1,13 +1,15 @@
 import { Breadcrumb } from "./core/breadcrumb";
-import XhrPlugin from "./plugins/xhr_plugin";
+import RequestPlugin from "./plugins/request_plugin";
 import { global } from "./core/global";
-import { DomPlugin } from "./plugins";
-import { HistoryPlugin } from "./plugins/history_plugin";
-import { ErrorPlugin } from "./plugins/error_plugin";
+import {
+  DomPlugin,
+  ConsolePlugin,
+  HistoryPlugin,
+  ErrorPlugin,
+} from "./plugins";
 import { ReportDataController } from "./core/report";
-import { ConsolePlugin } from "./plugins/console_plugin";
 const defaultPlugins = [
-  XhrPlugin,
+  RequestPlugin,
   DomPlugin,
   HistoryPlugin,
   ErrorPlugin,
@@ -21,12 +23,14 @@ export const TrackInit = (options: IOptionsParams) => {
     options,
     global,
   });
+  const PluginPrams = {
+    breadcrumb,
+    options,
+    global,
+    reportData: reportDataController,
+  };
   defaultPlugins.forEach((Plugin) => {
-    new Plugin({
-      breadcrumb,
-      options,
-      global,
-      reportData: reportDataController,
-    });
+    new Plugin(PluginPrams);
   });
+  return {};
 };
