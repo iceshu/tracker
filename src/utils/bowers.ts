@@ -31,7 +31,3 @@ export function parseUrlToObj(url: string) {
     relative: match[5] + query + fragment,
   };
 }
-export function getLocationHref(): string {
-  if (typeof document === "undefined" || document.location == null) return "";
-  return document.location.href;
-}

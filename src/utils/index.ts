@@ -59,3 +59,10 @@ export const readonly = (rawObject: any) =>
       throw new Error(`Property '${String(prop)}' is read-only`);
     },
   });
+export function isObject(value: any): boolean {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+export function getLocationHref(): string {
+  if (typeof document === "undefined" || document.location == null) return "";
+  return document.location.href;
+}

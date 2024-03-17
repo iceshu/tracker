@@ -1,11 +1,12 @@
 import { Breadcrumb } from "../core/breadcrumb";
 import { EMethods, EVENT_TYPE, HTTP_CODE, STATUS_CODE } from "../core/constant";
 import { Global, _global } from "../core/global";
+import { IOptionsParams } from "../core/options";
 import { ReportDataController } from "../core/report";
 import { HttpData } from "../core/typing";
 import { addEventListenerTo, fromHttpStatus, getTimestamp } from "../utils";
 import { HTTP_TYPE, IPluginParams } from "./common";
-class XhrPlugin {
+export class RequestPlugin {
   global: Global;
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
@@ -212,4 +213,3 @@ class XhrPlugin {
     };
   }
 }
-export default XhrPlugin;

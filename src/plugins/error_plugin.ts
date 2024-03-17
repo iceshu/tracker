@@ -11,6 +11,7 @@ import {
 } from "../utils";
 import ErrorStackParser from "error-stack-parser";
 import { IPluginParams } from "./common";
+import { IOptionsParams } from "../core/options";
 
 export class ErrorPlugin {
   options: IOptionsParams;

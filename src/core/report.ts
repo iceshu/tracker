@@ -5,6 +5,7 @@ import { EVENT_TYPE } from "./constant";
 import { Breadcrumb } from "./breadcrumb";
 import { ReportData } from "./typing";
 import { IPluginParams } from "../plugins/common";
+import { IOptionsParams } from "./options";
 export class ReportDataController {
   queue: Queue = new Queue(); // 消息队列
   apikey = ""; // 每个项目对应的唯一标识

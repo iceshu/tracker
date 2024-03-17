@@ -1,5 +1,6 @@
 import { Breadcrumb } from "../core/breadcrumb";
 import { Global } from "../core/global";
+import { IOptionsParams } from "../core/options";
 import { ReportDataController } from "../core/report";
 
 export abstract class ReplacePlugin {

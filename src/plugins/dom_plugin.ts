@@ -1,6 +1,7 @@
 import { Breadcrumb } from "../core/breadcrumb";
 import { BREADCRUMB_TYPE, EVENT_TYPE, STATUS_CODE } from "../core/constant";
 import { Global, _global } from "../core/global";
+import { IOptionsParams } from "../core/options";
 import { ReportDataController } from "../core/report";
 import {
   addEventListenerTo,
@@ -53,7 +54,7 @@ export class DomPlugin {
           status: STATUS_CODE.OK,
         });
       }
-    }, this.options.throttleDelayTime);
+    }, this.options.throttleDelayTime || 0);
 
     addEventListenerTo(
       _global.document,

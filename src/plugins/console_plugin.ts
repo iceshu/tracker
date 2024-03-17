@@ -4,6 +4,7 @@ import { IPluginParams } from "./common";
 import { Global, _global } from "../core/global";
 import { EVENT_TYPE, STATUS_CODE } from "../core/constant";
 import { getTimestamp } from "../utils";
+import { IOptionsParams } from "../core/options";
 
 export class ConsolePlugin {
   options: IOptionsParams;

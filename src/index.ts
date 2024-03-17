@@ -1,5 +1,4 @@
 import { Breadcrumb } from "./core/breadcrumb";
-import RequestPlugin from "./plugins/request_plugin";
 import { global } from "./core/global";
 import {
   DomPlugin,
@@ -7,10 +6,13 @@ import {
   HistoryPlugin,
   ErrorPlugin,
   PerformancePlugin,
+  VuePlugin,
+  RequestPlugin,
 } from "./plugins";
 import { ReportDataController } from "./core/report";
 import { readonly } from "./utils";
-const defaultPlugins = [
+import { IOptionsParams } from "./core/options";
+const defaultPlugins: any = [
   RequestPlugin,
   DomPlugin,
   HistoryPlugin,
@@ -31,13 +33,16 @@ export const TrackInit = (rawOptions: IOptionsParams) => {
   global.options = options;
   global.breadcrumb = breadcrumb;
   global.reportData = reportDataController;
+  if (options.vue) {
+    defaultPlugins.push(VuePlugin);
+  }
   const PluginPrams = {
     breadcrumb,
     options,
     global,
     reportData: reportDataController,
   };
-  defaultPlugins.forEach((Plugin) => {
+  defaultPlugins.forEach((Plugin: any) => {
     new Plugin(PluginPrams);
   });
   GLOBAL.__TRACK__ = PluginPrams;
