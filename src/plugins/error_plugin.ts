@@ -14,6 +14,7 @@ import { IPluginParams } from "./common";
 import { IOptionsParams } from "../core/options";
 
 export class ErrorPlugin {
+  name = "ERROR_PLUGIN";
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;

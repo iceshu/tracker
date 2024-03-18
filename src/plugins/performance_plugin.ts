@@ -3,7 +3,7 @@ import { EVENT_TYPE, STATUS_CODE } from "../core/constant";
 import { Breadcrumb } from "../core/breadcrumb";
 import { ReportDataController } from "../core/report";
 import { IPluginParams } from "./common";
-import { Global } from "../core/global";
+import { Global, _global } from "../core/global";
 import { Callback } from "../core/typing";
 import { addEventListenerTo, getTimestamp } from "../utils";
 import { IOptionsParams } from "../core/options";
@@ -42,7 +42,6 @@ export class PerformancePlugin {
   }
 
   getSourceData() {
-    const { _global } = this.global;
     const performance = _global.performance;
     addEventListenerTo(_global, "load", () => {
       // 上报资源列表
@@ -52,18 +51,18 @@ export class PerformancePlugin {
         status: STATUS_CODE.OK,
         resourceList: getResource(),
       });
-
+      const memory = (performance as any)["memory"];
       // 上报内存情况, safari、firefox不支持该属性
-      if (_global.performance?.memory) {
+      if (memory) {
         this.reportData.send({
           type: EVENT_TYPE.PERFORMANCE,
           name: "memory",
           time: getTimestamp(),
           status: STATUS_CODE.OK,
           memory: {
-            jsHeapSizeLimit: performance?.memory?.jsHeapSizeLimit,
-            totalJSHeapSize: performance?.memory?.totalJSHeapSize,
-            usedJSHeapSize: performance?.memory?.usedJSHeapSize,
+            jsHeapSizeLimit: memory?.jsHeapSizeLimit,
+            totalJSHeapSize: memory?.totalJSHeapSize,
+            usedJSHeapSize: memory?.usedJSHeapSize,
           },
         });
       }

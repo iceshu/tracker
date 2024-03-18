@@ -77,7 +77,6 @@ export class RequestPlugin {
     _global.XMLHttpRequest = proxyObj;
   }
   replaceFetch() {
-    const { _global } = this.global;
     if (!("fetch" in _global)) {
       return;
     }
@@ -96,7 +95,7 @@ export class RequestPlugin {
         };
 
         // 添加自定义逻辑
-        return target.apply(_global, args).then(
+        return target.apply(_global, args as any).then(
           (res: any) => {
             const tempRes = res.clone();
             const eTime = getTimestamp();

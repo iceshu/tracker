@@ -1,5 +1,5 @@
 import { Breadcrumb } from "./core/breadcrumb";
-import { global } from "./core/global";
+import { Global, global } from "./core/global";
 import {
   DomPlugin,
   ConsolePlugin,
@@ -42,9 +42,8 @@ export const TrackInit = (rawOptions: IOptionsParams) => {
     global,
     reportData: reportDataController,
   };
-  defaultPlugins.forEach((Plugin: any) => {
-    new Plugin(PluginPrams);
-  });
+  Global.plugins = defaultPlugins.map((Plugin: any) => new Plugin(PluginPrams));
   GLOBAL.__TRACK__ = PluginPrams;
   return global;
 };
+export default Global;
