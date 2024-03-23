@@ -9,9 +9,8 @@ import {
   VuePlugin,
   RequestPlugin,
 } from "./plugins";
-import { ReportDataController } from "./core/report";
-import { readonly } from "./utils";
 import { IOptionsParams } from "./core/options";
+import { BaseClient } from "./core";
 const defaultPlugins: any = [
   RequestPlugin,
   DomPlugin,
@@ -22,28 +21,8 @@ const defaultPlugins: any = [
 ];
 const GLOBAL: any = window;
 export const TrackInit = (rawOptions: IOptionsParams) => {
-  const options = readonly(rawOptions);
-  const { maxBreadcrumbs = 20, beforePushBreadcrumb } = options;
-  const breadcrumb = new Breadcrumb(maxBreadcrumbs, beforePushBreadcrumb);
-  const reportDataController = new ReportDataController({
-    breadcrumb,
-    options,
-    global,
-  });
-  global.options = options;
-  global.breadcrumb = breadcrumb;
-  global.reportData = reportDataController;
-  if (options.vue) {
-    defaultPlugins.push(VuePlugin);
-  }
-  const PluginPrams = {
-    breadcrumb,
-    options,
-    global,
-    reportData: reportDataController,
-  };
-  Global.plugins = defaultPlugins.map((Plugin: any) => new Plugin(PluginPrams));
-  GLOBAL.__TRACK__ = PluginPrams;
+  const baseClient = new BaseClient(rawOptions, defaultPlugins);
+  GLOBAL.__TRACK__ = baseClient;
   return global;
 };
 export default Global;

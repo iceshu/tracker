@@ -15,6 +15,5 @@ export enum HTTP_TYPE {
 export interface IPluginParams {
   breadcrumb: Breadcrumb;
   options: IOptionsParams;
-  global: Global;
   reportData: ReportDataController;
 }

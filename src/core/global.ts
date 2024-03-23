@@ -4,16 +4,12 @@ import { ReportDataController } from "./report";
 
 export const _global = window;
 export class Global {
-  deviceInfo: any;
-  breadcrumb?: Breadcrumb;
-  reportData?: ReportDataController;
-  options?: IOptionsParams;
+  static deviceInfo: any;
+  static breadcrumb?: Breadcrumb;
+  static options?: IOptionsParams;
   static plugins: any;
   static reportData: any;
-  constructor() {
-    this.setup();
-  }
-  setup() {}
+
   static log(data: any) {
     this.reportData?.send(data);
   }
