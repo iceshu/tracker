@@ -21,8 +21,10 @@ const defaultPlugins: any = [
 ];
 const GLOBAL: any = window;
 export const TrackInit = (rawOptions: IOptionsParams) => {
+  if (rawOptions.vue) {
+    defaultPlugins.push(VuePlugin);
+  }
   const baseClient = new BaseClient(rawOptions, defaultPlugins);
   GLOBAL.__TRACK__ = baseClient;
-  return global;
+  return baseClient;
 };
-export default Global;

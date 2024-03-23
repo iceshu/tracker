@@ -13,7 +13,7 @@ export class ConsolePlugin {
   isPoxing = false; // 标志位用于标识是否正在代理中
 
   constructor(params: IPluginParams) {
-    const { global, options, breadcrumb, reportData } = params;
+    const { options, breadcrumb, reportData } = params;
     this.options = options;
     this.breadcrumb = breadcrumb;
     this.reportData = reportData;

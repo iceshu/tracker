@@ -13,13 +13,11 @@ import { IPluginParams, ReplacePlugin } from "./common";
 import { UAParser } from "ua-parser-js";
 
 export class DomPlugin {
-  global: Global;
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
   constructor(params: IPluginParams) {
-    const { global, options, breadcrumb, reportData } = params;
-    this.global = global;
+    const { options, breadcrumb, reportData } = params;
     this.options = options;
     this.breadcrumb = breadcrumb;
     this.reportData = reportData;
@@ -30,7 +28,7 @@ export class DomPlugin {
   }
   initDeviceInfo() {
     const uaResult = new UAParser().getResult();
-    this.global.deviceInfo = {
+    Global.deviceInfo = {
       browserVersion: uaResult.browser.version, // // 浏览器版本号 107.0.0.0
       browser: uaResult.browser.name, // 浏览器类型 Chrome
       osVersion: uaResult.os.version, // 操作系统 电脑系统 10

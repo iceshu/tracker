@@ -7,13 +7,11 @@ import { getLocationHref, getTimestamp, parseUrlToObj } from "../utils";
 import { IPluginParams, ReplacePlugin } from "./common";
 
 export class HistoryPlugin {
-  global: Global;
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
   constructor(params: IPluginParams) {
-    const { global, options, breadcrumb, reportData } = params;
-    this.global = global;
+    const { options, breadcrumb, reportData } = params;
     this.options = options;
     this.breadcrumb = breadcrumb;
     this.reportData = reportData;

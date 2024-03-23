@@ -1,6 +1,5 @@
 import { Breadcrumb } from "./breadcrumb";
 import { IOptionsParams } from "./options";
-import { ReportDataController } from "./report";
 
 export const _global = window;
 export class Global {

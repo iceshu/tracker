@@ -5,10 +5,10 @@ import { IOptionsParams } from "./options";
 import { ReportDataController } from "./report";
 
 export class BaseClient {
-  protected reportData: ReportDataController;
-  protected plugins: Array<any>;
-  protected options: IOptionsParams;
-  protected breadcrumb: Breadcrumb;
+  private reportData: ReportDataController;
+  private plugins: Array<any>;
+  private options: IOptionsParams;
+  private breadcrumb: Breadcrumb;
 
   constructor(options: IOptionsParams, plugins: Array<any>) {
     this.options = readonly(options);

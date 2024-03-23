@@ -3,20 +3,18 @@ import { EVENT_TYPE, STATUS_CODE } from "../core/constant";
 import { Breadcrumb } from "../core/breadcrumb";
 import { ReportDataController } from "../core/report";
 import { IPluginParams } from "./common";
-import { Global, _global } from "../core/global";
+import { _global } from "../core/global";
 import { Callback } from "../core/typing";
 import { addEventListenerTo, getTimestamp } from "../utils";
 import { IOptionsParams } from "../core/options";
 
 export class PerformancePlugin {
   name = EVENT_TYPE.PERFORMANCE;
-  global: Global;
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
   constructor(params: IPluginParams) {
-    const { global, options, breadcrumb, reportData } = params;
-    this.global = global;
+    const { options, breadcrumb, reportData } = params;
     this.options = options;
     this.breadcrumb = breadcrumb;
     this.reportData = reportData;

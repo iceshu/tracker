@@ -8,13 +8,11 @@ import { EVENT_TYPE } from "../core/constant";
 import { IAnyObject } from "../core/typing";
 
 export class VuePlugin {
-  global: Global;
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
   constructor(params: IPluginParams) {
-    const { global, options, breadcrumb, reportData } = params;
-    this.global = global;
+    const { options, breadcrumb, reportData } = params;
     this.options = options;
     this.breadcrumb = breadcrumb;
     this.reportData = reportData;
