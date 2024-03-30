@@ -25,7 +25,7 @@ export class RequestPlugin {
   }
   setup() {
     this.replaceXhr();
-    this.replaceFetch();
+    this.fetchReplace();
   }
   replaceXhr(): void {
     const _this = this;
@@ -84,27 +84,33 @@ export class RequestPlugin {
     console.log("originalXhrProto", originalXhrProto);
   }
 
-  replaceFetch() {
+  fetchReplace() {
+    const _this = this;
     if (!("fetch" in _global)) {
       return;
     }
-
-    const fetchProxy = new Proxy(_global.fetch, {
-      apply: (target, thisArg, args) => {
-        const [url, config = {}] = args;
+    replaceAop(_global, EVENT_TYPE.FETCH, (originalFetch: any) => {
+      return function (url: any, config: Partial<Request> = {}): void {
         const sTime = getTimestamp();
-        const method = config.method || "GET";
+        const method = (config && config.method) || "GET";
         let fetchData = {
           type: HTTP_TYPE.FETCH,
           method,
-          requestData: config.body,
+          requestData: config && config.body,
           url,
           response: "",
         };
+        // 获取配置的headers
+        const headers = new Headers(config.headers || {});
+        Object.assign(headers, {
+          setRequestHeader: headers.set,
+        });
+        _this.options?.beforeAppAjaxSend?.({ method, url }, headers);
 
-        // 添加自定义逻辑
-        return target.apply(_global, args as any).then(
+        config = Object.assign({}, config, headers);
+        return originalFetch.apply(_global, [url, config]).then(
           (res: any) => {
+            // 克隆一份，防止被标记已消费
             const tempRes = res.clone();
             const eTime = getTimestamp();
             fetchData = Object.assign({}, fetchData, {
@@ -113,40 +119,41 @@ export class RequestPlugin {
               time: sTime,
             });
             tempRes.text().then((data: any) => {
-              // 自定义逻辑
-              // 判断是否需要过滤或处理接口数据
+              // 同理，进接口进行过滤
               if (
                 (method === EMethods.Post &&
-                  this.reportData.isSdkTransportUrl(url)) ||
-                this.reportData.isFilterHttpUrl(url)
+                  _this?.reportData?.isSdkTransportUrl(url)) ||
+                _this?.reportData?.isFilterHttpUrl(url)
               )
                 return;
-
-              this.handleData(fetchData);
+              // 用户设置handleHttpStatus函数来判断接口是否正确，只有接口报错时才保留response
+              if (_this.options?.handleHttpStatus?.(fetchData)) {
+                fetchData.response = data;
+              }
+              _this.handleData(data);
             });
             return res;
           },
+          // 接口报错
           (err: any) => {
             const eTime = getTimestamp();
             if (
               (method === EMethods.Post &&
-                this.reportData.isSdkTransportUrl(url)) ||
-              this.reportData.isFilterHttpUrl(url)
+                _this.reportData?.isSdkTransportUrl(url)) ||
+              _this.reportData?.isFilterHttpUrl(url)
             )
               return;
             fetchData = Object.assign({}, fetchData, {
               elapsedTime: eTime - sTime,
-              Status: 0,
+              status: 0,
               time: sTime,
             });
-            this.handleData(fetchData);
+            _this.handleData(fetchData);
             throw err;
           }
         );
-      },
+      };
     });
-    // 用代理对象替换原有的 fetch 方法
-    _global.fetch = fetchProxy;
   }
   handleData(xhrData: any) {
     const { url } = xhrData;
@@ -174,7 +181,6 @@ export class RequestPlugin {
       requestData,
     } = data;
     let status: STATUS_CODE;
-    debugger;
     if (Status === 0) {
       status = STATUS_CODE.ERROR;
       message =

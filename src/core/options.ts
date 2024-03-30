@@ -7,6 +7,7 @@ export interface IOptionsParams {
   [key: string]: any;
   beforeDataReport?: (T: any) => any;
   vue?: VueInstance;
+  handleHttpStatus?: (T: any) => boolean;
   throttleDelayTime?: 0;
 }
 
