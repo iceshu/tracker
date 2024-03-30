@@ -3,7 +3,7 @@ import { ReportDataController } from "../core/report";
 import { IPluginParams, ReplacePlugin } from "./common";
 import { _global } from "../core/global";
 import { EVENT_TYPE, PLUGIN_TYPE, STATUS_CODE } from "../core/constant";
-import { getTimestamp } from "../utils";
+import { getTimestamp, replaceAop } from "../utils";
 import { IOptionsParams } from "../core/options";
 
 export class ConsolePlugin implements ReplacePlugin {
@@ -36,28 +36,25 @@ export class ConsolePlugin implements ReplacePlugin {
     });
   }
   replace() {
+    const _this = this;
     if (!("console" in _global)) {
       return;
     }
-    const self = this;
     const logType = ["log", "debug", "info", "warn", "error", "assert"];
-
-    const consoleProxy = new Proxy(console, {
-      get(target, prop: keyof Console, receiver) {
-        if (logType.includes(prop) && !self.isPoxing) {
-          self.isPoxing = true;
-          return function (...args: any) {
-            self.handleConsole({ args, level: 1 });
-            self.isPoxing = false;
-            return (target[prop] as any).apply(target, args);
+    logType.forEach(function (level: string): void {
+      if (!(level in _global.console)) return;
+      replaceAop(
+        _global.console,
+        level,
+        function (originalConsole: () => any): Function {
+          return function (...args: any): void {
+            if (originalConsole) {
+              _this.handleConsole({ args, level });
+              originalConsole.apply(_global.console, args);
+            }
           };
-        } else {
-          return target[prop];
         }
-      },
+      );
     });
-
-    // 应用代理对象到全局的 console 对象上
-    _global.console = consoleProxy;
   }
 }

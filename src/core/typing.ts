@@ -17,7 +17,7 @@ export interface HttpData {
   elapsedTime: number; // 接口时长
   message: string; // 接口信息
   Status?: number; // 接口状态编码
-  status?: string; // 接口状态
+  status?: string | number; // 接口状态
   requestData?: {
     httpType: string; // 请求类型 xhr fetch
     method: string; // 请求方式
@@ -228,4 +228,9 @@ export abstract class BasePlugin {
   abstract bindOptions(options: object): void; // 校验参数
   abstract core(sdkBase: SdkBase): void; // 核心方法
   abstract transform(data: any): void; // 数据转化
+}
+
+export interface TRACKERHttpRequest extends XMLHttpRequest {
+  [key: string]: any;
+  record_xhr?: any;
 }

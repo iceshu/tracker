@@ -3,8 +3,14 @@ import { EMethods, EVENT_TYPE, HTTP_CODE, STATUS_CODE } from "../core/constant";
 import { _global } from "../core/global";
 import { IOptionsParams } from "../core/options";
 import { ReportDataController } from "../core/report";
-import { HttpData } from "../core/typing";
-import { addEventListenerTo, fromHttpStatus, getTimestamp } from "../utils";
+import { HttpData, TRACKERHttpRequest, voidFun } from "../core/typing";
+import {
+  addEventListenerTo,
+  fromHttpStatus,
+  getTimestamp,
+  isString,
+  replaceAop,
+} from "../utils";
 import { HTTP_TYPE, IPluginParams } from "./common";
 export class RequestPlugin {
   options: IOptionsParams;
@@ -22,58 +28,62 @@ export class RequestPlugin {
     this.replaceFetch();
   }
   replaceXhr(): void {
+    const _this = this;
     if (!("XMLHttpRequest" in _global)) {
       return;
     }
-    const that = this;
+    const originalXhrProto = XMLHttpRequest.prototype;
+    replaceAop(originalXhrProto, "open", (originalOpen: voidFun): voidFun => {
+      return function (this: TRACKERHttpRequest, ...args: any[]): void {
+        this.record_xhr = {
+          method: isString(args[0]) ? args[0].toUpperCase() : args[0],
+          url: args[1],
+          sTime: getTimestamp(),
+          type: HTTP_TYPE.XHR,
+        };
 
-    const proxyObj = new Proxy(_global.XMLHttpRequest, {
-      construct(target: any, args: any[]) {
-        const xhr = new target(...args);
-        return new Proxy(xhr, {
-          get(target: any, prop: string, receiver: any) {
-            if (prop === "open") {
-              return (method: string, url: string) => {
-                target.__xhr = {
-                  method: method.toUpperCase(),
-                  url,
-                  sTime: getTimestamp(),
-                  type: HTTP_TYPE.XHR,
-                };
-                return Reflect.get(target, prop, receiver).apply(
-                  this,
-                  arguments
-                );
-              };
-            }
-            if (prop === "send") {
-              return (data: any) => {
-                addEventListenerTo(xhr, "loadend", () => {
-                  const { responseType, status } = xhr;
-                  target.__xhr.requestData = data;
-                  target.__xhr.time = target.__xhr.sTime;
-                  target.__xhr.Status = status;
-                  if (["", "json", "text"].indexOf(responseType) > -1) {
-                    target.__xhr.response =
-                      xhr.response && JSON.parse(xhr.response);
-                  }
-                  target.__xhr.elapsedTime =
-                    getTimestamp() - target.__xhr.sTime;
-                  that.handleData(target.__xhr);
-                });
-                return Reflect.get(target, prop, receiver).apply(
-                  this,
-                  arguments
-                );
-              };
-            }
-            return Reflect.get(target, prop, receiver);
-          },
-        });
-      },
+        originalOpen.apply(this, args);
+      };
     });
-    _global.XMLHttpRequest = proxyObj;
+    replaceAop(originalXhrProto, "send", (originalSend: voidFun): voidFun => {
+      return function (this: TRACKERHttpRequest, ...args: any[]): void {
+        const { method, url } = this.record_xhr;
+        // setTraceId(url, (headerFieldName: string, traceId: string) => {
+        //   this.record_xhr.traceId = traceId;
+        //   this.setRequestHeader(headerFieldName, traceId);
+        // });
+        _this.options.beforeAppAjaxSend?.({ method, url }, this);
+        addEventListenerTo(
+          this,
+          "loadend",
+          function (this: TRACKERHttpRequest) {
+            if (
+              (method === EMethods.Post &&
+                _this.reportData?.isSdkTransportUrl?.(url)) ||
+              _this.reportData?.isFilterHttpUrl(url)
+            )
+              return;
+            const { responseType, response, status } = this;
+            this.record_xhr.requestData = args[0];
+            const eTime = getTimestamp();
+            this.record_xhr.time = this.record_xhr.sTime;
+            this.record_xhr.Status = status;
+            if (["", "json", "text"].indexOf(responseType) !== -1) {
+              this.record_xhr.responseText =
+                typeof response === "object"
+                  ? JSON.stringify(response)
+                  : response;
+            }
+            this.record_xhr.elapsedTime = eTime - this.record_xhr.sTime;
+            _this.handleData(this.record_xhr);
+          }
+        );
+        originalSend.apply(this, args);
+      };
+    });
+    console.log("originalXhrProto", originalXhrProto);
   }
+
   replaceFetch() {
     if (!("fetch" in _global)) {
       return;
@@ -126,7 +136,7 @@ export class RequestPlugin {
               return;
             fetchData = Object.assign({}, fetchData, {
               elapsedTime: eTime - sTime,
-              status: 0,
+              Status: 0,
               time: sTime,
             });
             this.handleData(fetchData);
@@ -164,6 +174,7 @@ export class RequestPlugin {
       requestData,
     } = data;
     let status: STATUS_CODE;
+    debugger;
     if (Status === 0) {
       status = STATUS_CODE.ERROR;
       message =

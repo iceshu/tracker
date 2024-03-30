@@ -23,7 +23,7 @@ export enum BREADCRUMB_TYPE {
   HTTP = "Http",
   CLICK = "Click",
   RESOURCE = "Resource_Error",
-  CODEERROR = "Code_Error",
+  CODE_ERROR = "Code_Error",
   ROUTE = "Route",
   CUSTOM = "Custom",
   CONSOLE = "console",

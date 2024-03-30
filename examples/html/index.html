@@ -6,7 +6,38 @@
     <title>Document</title>
   </head>
   <body>
-    <button>点击</button>
+    <button id="btn">点击</button>
     <script type="module" src="./main.js"></script>
+    <script>
+      document.querySelector("#btn").addEventListener("click", () => {
+        requestTest();
+      });
+      function requestTest(params) {
+        const xhr = new XMLHttpRequest();
+        // 设置请求方法和URL
+        xhr.open("POST", "/server", true);
+
+        // 设置请求头
+        xhr.setRequestHeader(
+          "Content-type",
+          "application/x-www-form-urlencoded"
+        );
+
+        // 发送请求
+        xhr.send("foo=bar&lorem=ipsum");
+
+        // 监听响应
+        xhr.onload = function () {
+          if (xhr.status === 200) {
+            // 请求成功
+            const users = JSON.parse(xhr.responseText);
+            console.log(users);
+          } else {
+            // 请求失败
+            console.error(xhr.status, xhr.responseText);
+          }
+        };
+      }
+    </script>
   </body>
 </html>

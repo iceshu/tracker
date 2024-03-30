@@ -64,7 +64,7 @@ export class Breadcrumb {
       // Js代码报错
       case EVENT_TYPE.UNHANDLEDREJECTION:
       case EVENT_TYPE.ERROR:
-        return BREADCRUMB_TYPE.CODEERROR;
+        return BREADCRUMB_TYPE.CODE_ERROR;
 
       case EVENT_TYPE.CONSOLE:
         return BREADCRUMB_TYPE.CONSOLE;
