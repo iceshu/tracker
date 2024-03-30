@@ -24,64 +24,57 @@ export class RequestPlugin {
     this.setup();
   }
   setup() {
-    this.replaceXhr();
+    this.xhrReplace();
     this.fetchReplace();
   }
-  replaceXhr(): void {
+  xhrReplace(): void {
     const _this = this;
     if (!("XMLHttpRequest" in _global)) {
       return;
     }
     const originalXhrProto = XMLHttpRequest.prototype;
-    replaceAop(originalXhrProto, "open", (originalOpen: voidFun): voidFun => {
-      return function (this: TRACKERHttpRequest, ...args: any[]): void {
+    replaceAop(originalXhrProto, "open", (originalOpen: voidFun) => {
+      return function (this: any, ...args: any[]): void {
         this.record_xhr = {
           method: isString(args[0]) ? args[0].toUpperCase() : args[0],
           url: args[1],
           sTime: getTimestamp(),
           type: HTTP_TYPE.XHR,
         };
-
         originalOpen.apply(this, args);
       };
     });
-    replaceAop(originalXhrProto, "send", (originalSend: voidFun): voidFun => {
-      return function (this: TRACKERHttpRequest, ...args: any[]): void {
+    replaceAop(originalXhrProto, "send", (originalSend: voidFun) => {
+      return function (this: any, ...args: any): void {
         const { method, url } = this.record_xhr;
-        // setTraceId(url, (headerFieldName: string, traceId: string) => {
-        //   this.record_xhr.traceId = traceId;
-        //   this.setRequestHeader(headerFieldName, traceId);
-        // });
-        _this.options.beforeAppAjaxSend?.({ method, url }, this);
-        addEventListenerTo(
-          this,
-          "loadend",
-          function (this: TRACKERHttpRequest) {
-            if (
-              (method === EMethods.Post &&
-                _this.reportData?.isSdkTransportUrl?.(url)) ||
-              _this.reportData?.isFilterHttpUrl(url)
-            )
-              return;
-            const { responseType, response, status } = this;
-            this.record_xhr.requestData = args[0];
-            const eTime = getTimestamp();
-            this.record_xhr.time = this.record_xhr.sTime;
-            this.record_xhr.Status = status;
-            if (["", "json", "text"].indexOf(responseType) !== -1) {
-              this.record_xhr.responseText =
-                typeof response === "object"
-                  ? JSON.stringify(response)
-                  : response;
+        // 监听loadend事件，接口成功或失败都会执行
+        addEventListenerTo(this, "loadend", function (this: any) {
+          if (
+            (method === EMethods.Post &&
+              _this.reportData?.isSdkTransportUrl?.(url)) ||
+            _this.reportData?.isSdkTransportUrl?.(url)
+          )
+            return;
+          const { responseType, response, status } = this;
+          this.record_xhr.requestData = args[0];
+          const eTime = getTimestamp();
+          // 设置该接口的time，用户用户行为按时间排序
+          this.record_xhr.time = this.record_xhr.sTime;
+          this.record_xhr.Status = status;
+          if (["", "json", "text"].indexOf(responseType) !== -1) {
+            // 用户设置handleHttpStatus函数来判断接口是否正确，只有接口报错时才保留response
+            if (_this.options?.handleHttpStatus?.call(_this, this.record_xhr)) {
+              this.record_xhr.response = response && JSON.parse(response);
             }
-            this.record_xhr.elapsedTime = eTime - this.record_xhr.sTime;
-            _this.handleData(this.record_xhr);
           }
-        );
+          // 接口的执行时长
+          this.record_xhr.elapsedTime = eTime - this.record_xhr.sTime;
+          // 执行之前注册的xhr回调函数
+          _this.handleData(this.record_xhr);
+        });
         originalSend.apply(this, args);
       };
     });
-    console.log("originalXhrProto", originalXhrProto);
   }
 
   fetchReplace() {

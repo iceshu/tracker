@@ -1,5 +1,5 @@
 import './assets/main.css'
-import { TrackInit } from 'tracker'
+import Tracker from 'tracker'
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
@@ -10,8 +10,8 @@ const app = createApp(App)
 
 app.use(createPinia())
 app.use(router)
-
-app.mount('#app')
-TrackInit({
+app.use(Tracker, {
   dns: 'https://example.com'
 })
+
+app.mount('#app')

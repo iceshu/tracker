@@ -7,7 +7,7 @@ import {
   VuePlugin,
   RequestPlugin,
 } from "./plugins";
-import { IOptionsParams } from "./core/options";
+import { IOptionsParams, ViewModel, VueInstance } from "./core/options";
 import { BaseClient } from "./core";
 const defaultPlugins: any = [
   RequestPlugin,
@@ -26,3 +26,14 @@ export const TrackInit = (rawOptions: IOptionsParams) => {
   GLOBAL.__TRACK__ = baseClient;
   return baseClient;
 };
+export function install(Vue: VueInstance, rawOptions: IOptionsParams) {
+  const handler = Vue.config?.errorHandler;
+  // vue项目在Vue.config.errorHandler中上报错误
+  const baseClient = TrackInit(rawOptions);
+  Vue.config!.errorHandler = function (err, vm, info) {
+    console.log(err);
+    baseClient.errorBoundary(err);
+    if (handler) handler.apply(null, [err, vm, info]);
+  };
+}
+export default { install, TrackInit };
