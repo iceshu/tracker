@@ -15,7 +15,6 @@ export default {
       format: "es",
       file: pkg.module,
       name: pkg.name,
-      exports: "named", // 指定导出模式（自动、默认、命名、无）
     },
   ],
   plugins: [

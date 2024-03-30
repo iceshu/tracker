@@ -3,6 +3,7 @@ import { EVENT_TYPE, PLUGIN_TYPE, STATUS_CODE } from "../core/constant";
 import { _global } from "../core/global";
 import { IOptionsParams } from "../core/options";
 import { ReportDataController } from "../core/report";
+import { voidFun } from "../core/typing";
 import { getLocationHref, getTimestamp, parseUrlToObj } from "../utils";
 import { IPluginParams, ReplacePlugin } from "./common";
 
@@ -34,19 +35,33 @@ export class HistoryPlugin implements ReplacePlugin {
       });
       oldOnpopstate && oldOnpopstate.apply(_global, args as any);
     };
-    const historyProxy = new Proxy(history, {
-      apply: function (target: any, thisArg, argumentsList) {
-        return function (...args: any) {
-          // 添加自定义逻辑
-          console.log("Custom logic for history manipulation");
+    // 保存原始的 pushState 和 replaceState 方法
+    const originalPushState = window.history.pushState;
+    const originalReplaceState = window.history.replaceState;
+    const that = this;
 
+    function createProxy(originalMethod: voidFun) {
+      return new Proxy(originalMethod, {
+        apply: (target, thisArg, argumentsList) => {
+          // 添加自定义逻辑
+          const url = argumentsList.length > 2 ? argumentsList[2] : undefined;
+          if (url) {
+            const from = lastHref;
+            const to = String(url);
+            lastHref = to;
+            that.handleData({
+              from,
+              to,
+            });
+          }
+          console.log("Custom logic for history manipulation");
           // 调用原生方法
           return Reflect.apply(target, thisArg, argumentsList);
-        };
-      },
-    });
-    history.pushState = historyProxy.pushState;
-    history.replaceState = historyProxy.replaceState;
+        },
+      });
+    }
+    history.pushState = createProxy(originalPushState);
+    history.replaceState = createProxy(originalReplaceState);
   }
   supportHistory() {
     return !!(_global.history && _global.history.pushState);

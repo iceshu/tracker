@@ -1,0 +1,10 @@
+{
+  "version": "v1",
+  "packages": {
+    "tracker": {
+      "signature": "499c8fc30b8146d2ecdfef36f8d5675b",
+      "file": true,
+      "replaced": "workspace*"
+    }
+  }
+}

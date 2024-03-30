@@ -88,7 +88,6 @@ export class ErrorPlugin implements ReplacePlugin {
 
     // 资源加载报错
     if (target?.localName) {
-      debugger;
       // 提取资源加载的信息
       const data = resourceTransform(target);
       this.breadcrumb.push({
