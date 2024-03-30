@@ -38,9 +38,8 @@ export class HistoryPlugin implements ReplacePlugin {
     // 保存原始的 pushState 和 replaceState 方法
     const originalPushState = window.history.pushState;
     const originalReplaceState = window.history.replaceState;
-    const that = this;
 
-    function createProxy(originalMethod: voidFun) {
+    const createProxy = (originalMethod: voidFun) => {
       return new Proxy(originalMethod, {
         apply: (target, thisArg, argumentsList) => {
           // 添加自定义逻辑
@@ -49,17 +48,16 @@ export class HistoryPlugin implements ReplacePlugin {
             const from = lastHref;
             const to = String(url);
             lastHref = to;
-            that.handleData({
+            this.handleData({
               from,
               to,
             });
           }
-          console.log("Custom logic for history manipulation");
           // 调用原生方法
           return Reflect.apply(target, thisArg, argumentsList);
         },
       });
-    }
+    };
     history.pushState = createProxy(originalPushState);
     history.replaceState = createProxy(originalReplaceState);
   }
