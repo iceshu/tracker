@@ -1,6 +1,6 @@
 import { Breadcrumb } from "../core/breadcrumb";
-import { EVENT_TYPE, STATUS_CODE } from "../core/constant";
-import { Global, _global } from "../core/global";
+import { EVENT_TYPE, PLUGIN_TYPE, STATUS_CODE } from "../core/constant";
+import { _global } from "../core/global";
 import { ReportDataController } from "../core/report";
 import { ErrorTarget, ResourceError, ResourceTarget } from "../core/typing";
 import {
@@ -10,11 +10,11 @@ import {
   isUndefined,
 } from "../utils";
 import ErrorStackParser from "error-stack-parser";
-import { IPluginParams } from "./common";
+import { IPluginParams, ReplacePlugin } from "./common";
 import { IOptionsParams } from "../core/options";
 
-export class ErrorPlugin {
-  name = "ERROR_PLUGIN";
+export class ErrorPlugin implements ReplacePlugin {
+  name = PLUGIN_TYPE.ERROR_PLUGIN;
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
@@ -88,6 +88,7 @@ export class ErrorPlugin {
 
     // 资源加载报错
     if (target?.localName) {
+      debugger;
       // 提取资源加载的信息
       const data = resourceTransform(target);
       this.breadcrumb.push({

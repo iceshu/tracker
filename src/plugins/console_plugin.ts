@@ -1,12 +1,13 @@
 import { Breadcrumb } from "../core/breadcrumb";
 import { ReportDataController } from "../core/report";
-import { IPluginParams } from "./common";
-import { Global, _global } from "../core/global";
-import { EVENT_TYPE, STATUS_CODE } from "../core/constant";
+import { IPluginParams, ReplacePlugin } from "./common";
+import { _global } from "../core/global";
+import { EVENT_TYPE, PLUGIN_TYPE, STATUS_CODE } from "../core/constant";
 import { getTimestamp } from "../utils";
 import { IOptionsParams } from "../core/options";
 
-export class ConsolePlugin {
+export class ConsolePlugin implements ReplacePlugin {
+  name = PLUGIN_TYPE.CONSOLE_PLUGIN;
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;

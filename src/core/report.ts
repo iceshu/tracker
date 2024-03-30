@@ -1,5 +1,5 @@
 import { Queue } from "./queue";
-import { global } from "./global";
+import { Global } from "./global";
 import { generateUUID, getLocationHref, isEmpty } from "../utils";
 import { EVENT_TYPE } from "./constant";
 import { Breadcrumb } from "./breadcrumb";
@@ -92,9 +92,9 @@ export class ReportDataController {
       ...data,
       userInfo: this.getAuthInfo(), // 获取用户信息
       uuid: this.uuid,
-      releaseVersion: global.options?.version,
+      releaseVersion: this.options?.version,
       pageUrl: getLocationHref(),
-      deviceInfo: global.deviceInfo, // 获取设备信息
+      deviceInfo: Global.deviceInfo, // 获取设备信息
     };
 
     // 性能数据、录屏、白屏检测等不需要附带用户行为

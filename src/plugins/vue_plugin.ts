@@ -2,7 +2,7 @@ import { Breadcrumb } from "../core/breadcrumb";
 import { IOptionsParams, ViewModel } from "../core/options";
 import { ReportDataController } from "../core/report";
 import { IPluginParams } from "./common";
-import { Global, _global } from "../core/global";
+import { _global } from "../core/global";
 import { getLocationHref, getTimestamp, isObject } from "../utils";
 import { EVENT_TYPE } from "../core/constant";
 import { IAnyObject } from "../core/typing";

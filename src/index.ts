@@ -1,5 +1,3 @@
-import { Breadcrumb } from "./core/breadcrumb";
-import { Global, global } from "./core/global";
 import {
   DomPlugin,
   ConsolePlugin,

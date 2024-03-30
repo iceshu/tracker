@@ -1,6 +1,6 @@
 import { Breadcrumb } from "../core/breadcrumb";
 import { EMethods, EVENT_TYPE, HTTP_CODE, STATUS_CODE } from "../core/constant";
-import { Global, _global } from "../core/global";
+import { _global } from "../core/global";
 import { IOptionsParams } from "../core/options";
 import { ReportDataController } from "../core/report";
 import { HttpData } from "../core/typing";

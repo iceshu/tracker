@@ -1,5 +1,10 @@
 import { Breadcrumb } from "../core/breadcrumb";
-import { BREADCRUMB_TYPE, EVENT_TYPE, STATUS_CODE } from "../core/constant";
+import {
+  BREADCRUMB_TYPE,
+  EVENT_TYPE,
+  PLUGIN_TYPE,
+  STATUS_CODE,
+} from "../core/constant";
 import { Global, _global } from "../core/global";
 import { IOptionsParams } from "../core/options";
 import { ReportDataController } from "../core/report";
@@ -12,7 +17,8 @@ import {
 import { IPluginParams, ReplacePlugin } from "./common";
 import { UAParser } from "ua-parser-js";
 
-export class DomPlugin {
+export class DomPlugin implements ReplacePlugin {
+  name = PLUGIN_TYPE.DOM_PLUGIN;
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
@@ -21,6 +27,7 @@ export class DomPlugin {
     this.options = options;
     this.breadcrumb = breadcrumb;
     this.reportData = reportData;
+    this.setup();
   }
   setup() {
     this.initDeviceInfo();

@@ -1,12 +1,13 @@
 import { Breadcrumb } from "../core/breadcrumb";
-import { EVENT_TYPE, STATUS_CODE } from "../core/constant";
-import { Global, _global } from "../core/global";
+import { EVENT_TYPE, PLUGIN_TYPE, STATUS_CODE } from "../core/constant";
+import { _global } from "../core/global";
 import { IOptionsParams } from "../core/options";
 import { ReportDataController } from "../core/report";
 import { getLocationHref, getTimestamp, parseUrlToObj } from "../utils";
 import { IPluginParams, ReplacePlugin } from "./common";
 
-export class HistoryPlugin {
+export class HistoryPlugin implements ReplacePlugin {
+  name = PLUGIN_TYPE.HISTORY_PLUGIN;
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
@@ -15,9 +16,9 @@ export class HistoryPlugin {
     this.options = options;
     this.breadcrumb = breadcrumb;
     this.reportData = reportData;
-    this.replace();
+    this.setup();
   }
-  replace() {
+  setup() {
     if (!supportsHistory()) {
       return;
     }

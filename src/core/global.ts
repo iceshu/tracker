@@ -9,9 +9,6 @@ export class Global {
   static plugins: any;
   static reportData: any;
 
-  static log(data: any) {
-    this.reportData?.send(data);
-  }
   static errorBoundary(err: Error) {
     const errorPlugin = this.plugins?.find(
       (item: { name: string }) => item.name === "ERROR_PLUGIN"
@@ -19,4 +16,3 @@ export class Global {
     errorPlugin?.handleError(err);
   }
 }
-export const global = new Global();
