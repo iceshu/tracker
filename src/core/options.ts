@@ -5,7 +5,7 @@ export interface IOptionsParams {
   version?: string;
   filterXhrUrlRegExp?: RegExp;
   [key: string]: any;
-  beforeDataReport: (T: any) => any;
+  beforeDataReport?: (T: any) => any;
   vue?: VueInstance;
   throttleDelayTime?: 0;
 }

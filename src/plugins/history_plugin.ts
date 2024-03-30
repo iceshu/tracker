@@ -35,30 +35,18 @@ export class HistoryPlugin implements ReplacePlugin {
       oldOnpopstate && oldOnpopstate.apply(_global, args as any);
     };
     const historyProxy = new Proxy(history, {
-      get: (target, prop, receiver) => {
-        if (prop === "pushState" || prop === "replaceState") {
-          return (args: string | readonly any[]) => {
-            // 在调用原始方法之前执行自定义代码
-            const url = args.length > 2 ? args[2] : undefined;
-            if (url) {
-              const from = lastHref;
-              const to = String(url);
-              lastHref = to;
-              this.handleData({
-                from,
-                to,
-              });
-            }
-            // 调用原始方法
-            return Reflect.apply(target[prop], this, args);
-          };
-        }
-        return Reflect.get(target, prop, receiver);
+      apply: function (target: any, thisArg, argumentsList) {
+        return function (...args: any) {
+          // 添加自定义逻辑
+          console.log("Custom logic for history manipulation");
+
+          // 调用原生方法
+          return Reflect.apply(target, thisArg, argumentsList);
+        };
       },
     });
-    Object.defineProperty(_global, "history", {
-      value: historyProxy,
-    });
+    history.pushState = historyProxy.pushState;
+    history.replaceState = historyProxy.replaceState;
   }
   supportHistory() {
     return !!(_global.history && _global.history.pushState);
