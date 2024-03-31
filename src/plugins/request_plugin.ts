@@ -1,5 +1,11 @@
 import { Breadcrumb } from "../core/breadcrumb";
-import { EMethods, EVENT_TYPE, HTTP_CODE, STATUS_CODE } from "../core/constant";
+import {
+  BREADCRUMB_TYPE,
+  EMethods,
+  EVENT_TYPE,
+  HTTP_CODE,
+  STATUS_CODE,
+} from "../core/constant";
 import { _global } from "../core/global";
 import { IOptionsParams } from "../core/options";
 import { ReportDataController } from "../core/report";
@@ -70,7 +76,7 @@ export class RequestPlugin {
           // 接口的执行时长
           this.record_xhr.elapsedTime = eTime - this.record_xhr.sTime;
           // 执行之前注册的xhr回调函数
-          _this.handleData(this.record_xhr);
+          _this.handleData(this.record_xhr, EVENT_TYPE.XHR);
         });
         originalSend.apply(this, args);
       };
@@ -123,7 +129,7 @@ export class RequestPlugin {
               if (_this.options?.handleHttpStatus?.(fetchData)) {
                 fetchData.response = data;
               }
-              _this.handleData(data);
+              _this.handleData(data, EVENT_TYPE.FETCH);
             });
             return res;
           },
@@ -141,25 +147,39 @@ export class RequestPlugin {
               status: 0,
               time: sTime,
             });
-            _this.handleData(fetchData);
+            _this.handleData(fetchData, EVENT_TYPE.FETCH);
             throw err;
           }
         );
       };
     });
   }
-  handleData(xhrData: any) {
-    const { url } = xhrData;
+  handleData(xhrData: any, type: EVENT_TYPE) {
+    const { url, Status } = xhrData;
+    const isError =
+      Status === 0 ||
+      Status === HTTP_CODE.BAD_REQUEST ||
+      Status > HTTP_CODE.UNAUTHORIZED;
+    const result = this.handleTransForm(xhrData);
     if (!url.includes(this.options.dsn)) {
-      const result = this.handleTransForm(xhrData);
-      const category = this.breadcrumb.getCategory(xhrData.type! as EVENT_TYPE);
+      const category = this.breadcrumb.getCategory(type);
       this.breadcrumb.push({
-        type: EVENT_TYPE.FETCH,
+        type: type,
         category,
-        data: result,
+        data: { ...result },
         time: xhrData.time,
-        status: result.status,
+        status: STATUS_CODE.OK,
       });
+    }
+    if (isError) {
+      this.breadcrumb.push({
+        type,
+        category: this.breadcrumb.getCategory(type),
+        data: { ...result },
+        time: xhrData.time,
+        status: STATUS_CODE.ERROR,
+      });
+      this.reportData.send(xhrData);
     }
   }
   handleTransForm(data: HttpData) {
