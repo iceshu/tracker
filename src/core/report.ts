@@ -3,7 +3,7 @@ import { Global } from "./global";
 import { generateUUID, getLocationHref, isEmpty } from "../utils";
 import { EVENT_TYPE } from "./constant";
 import { Breadcrumb } from "./breadcrumb";
-import { ReportData } from "./typing";
+import { ISendData, ReportData } from "./typing";
 import { IPluginParams } from "../plugins/common";
 import { IOptionsParams } from "./options";
 export class ReportDataController {
@@ -27,8 +27,11 @@ export class ReportDataController {
     this.options = options;
     this.beforeDataReport = options?.beforeDataReport;
   }
-  beacon(url: string, data: any): boolean {
-    return navigator.sendBeacon(url, JSON.stringify(data));
+  beacon(url: string, json: any): boolean {
+    const data = new Blob([JSON.stringify(json)], {
+      type: "application/json",
+    });
+    return navigator.sendBeacon(url, data);
   }
   imgRequest(data: ReportData, url: string): void {
     const sendData = (imageUrl: string) => {
@@ -43,7 +46,7 @@ export class ReportDataController {
     this.queue.addFn(sendData);
   }
 
-  async beforePost(this: any, data: ReportData): Promise<ReportData | boolean> {
+  async beforePost(this: any, data: ISendData): Promise<ReportData | boolean> {
     let transportData = this.getTransportData(data);
     // 配置了beforeDataReport
     if (typeof this.beforeDataReport === "function") {
@@ -123,13 +126,15 @@ export class ReportDataController {
     );
   }
   // 上报数据
-  async send(data: any) {
+  async send(data: ISendData) {
     const dsn = this.dns;
     if (isEmpty(dsn)) {
       console.error("dsn为空，没有传入监控错误上报的dsn地址，请在init中传入");
       return;
     }
-
+    data.uuid = this.uuid;
+    data.apiKey = this.apikey;
+    data.pageUrl = getLocationHref();
     const result = (await this.beforePost(data)) as ReportData;
     if (result) {
       // 优先使用sendBeacon 上报，若数据量大，再使用图片打点上报和fetch上报

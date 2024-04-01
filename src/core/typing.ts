@@ -215,9 +215,6 @@ export interface Window {
   innerHeight: any;
   onpopstate: any;
   performance: any;
-  __webSee__: {
-    [key: string]: any;
-  };
 }
 
 export abstract class BasePlugin {
@@ -233,4 +230,14 @@ export abstract class BasePlugin {
 export interface TRACKERHttpRequest extends XMLHttpRequest {
   [key: string]: any;
   record_xhr?: any;
+}
+
+export interface ISendData {
+  type: EVENT_TYPE; // 事件类型
+  name: string;
+  time: number;
+  data: any;
+  status: STATUS_CODE;
+  breadcrumb?: BreadcrumbData[]; // 用户行为
+  [key: string]: any;
 }

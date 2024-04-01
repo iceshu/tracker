@@ -16,7 +16,7 @@
   "dependencies": {
     "axios": "^1.6.8",
     "pinia": "^2.1.7",
-    "tracker": "file:.yalc/tracker",
+    "tc-tracker": "file:.yalc/tc-tracker",
     "vue": "^3.4.21",
     "vue-router": "^4.3.0"
   },

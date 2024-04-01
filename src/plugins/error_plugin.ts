@@ -62,10 +62,12 @@ export class ErrorPlugin implements ReplacePlugin {
         type: EVENT_TYPE.ERROR,
         status: STATUS_CODE.ERROR,
         time: getTimestamp(),
-        message: ev.message,
-        fileName,
-        line: lineNumber,
-        column: columnNumber,
+        data: {
+          message: ev.message,
+          fileName,
+          line: lineNumber,
+          column: columnNumber,
+        },
       };
       this.breadcrumb.push({
         type: EVENT_TYPE.ERROR,
@@ -98,9 +100,11 @@ export class ErrorPlugin implements ReplacePlugin {
         data,
       });
       return this.reportData.send({
-        ...data,
+        data,
+        name: "resource_error",
         type: EVENT_TYPE.RESOURCE,
         status: STATUS_CODE.ERROR,
+        time: getTimestamp(),
       });
     }
   }

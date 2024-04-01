@@ -33,8 +33,11 @@ export class BaseClient {
     this.#reportData?.send({
       type: EVENT_TYPE.CUSTOM,
       status: STATUS_CODE.OK,
+      name: EVENT_TYPE.CUSTOM,
+      data: {
+        value,
+      },
       time: getTimestamp(),
-      value,
     });
   }
 

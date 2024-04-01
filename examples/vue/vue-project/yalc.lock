@@ -1,10 +1,9 @@
 {
   "version": "v1",
   "packages": {
-    "tracker": {
-      "signature": "5223f76578e97509b6f83d9623248b86",
-      "file": true,
-      "replaced": "workspace*"
+    "tc-tracker": {
+      "signature": "3b7753e9fbf0632a0163cd5887f6f9ef",
+      "file": true
     }
   }
 }

@@ -23,7 +23,6 @@ export const TrackInit = (rawOptions: IOptionsParams) => {
     defaultPlugins.push(VuePlugin);
   }
   const baseClient = new BaseClient(rawOptions, defaultPlugins);
-  GLOBAL.__TRACK__ = baseClient;
   return baseClient;
 };
 export function install(Vue: VueInstance, rawOptions: IOptionsParams) {

@@ -5,7 +5,7 @@ import { ReportDataController } from "../core/report";
 import { IPluginParams } from "./common";
 import { _global } from "../core/global";
 import { Callback } from "../core/typing";
-import { addEventListenerTo, getTimestamp } from "../utils";
+import { addEventListenerTo, getLocationHref, getTimestamp } from "../utils";
 import { IOptionsParams } from "../core/options";
 
 export class PerformancePlugin implements IPluginParams {
@@ -27,14 +27,12 @@ export class PerformancePlugin implements IPluginParams {
 
   getPerformanceData() {
     getWebVitals((res: any) => {
-      const { name, rating, value } = res;
       this.reportData.send({
         type: EVENT_TYPE.PERFORMANCE,
         status: STATUS_CODE.OK,
         time: getTimestamp(),
-        name,
-        rating,
-        value,
+        data: res,
+        name: res.name,
       });
     });
   }
@@ -47,7 +45,10 @@ export class PerformancePlugin implements IPluginParams {
         type: EVENT_TYPE.PERFORMANCE,
         name: "resourceList",
         status: STATUS_CODE.OK,
-        resourceList: getResource(),
+        data: {
+          resourceList: getResource(),
+        },
+        time: getTimestamp(),
       });
       const memory = (performance as any)["memory"];
       // 上报内存情况, safari、firefox不支持该属性
@@ -56,12 +57,14 @@ export class PerformancePlugin implements IPluginParams {
           type: EVENT_TYPE.PERFORMANCE,
           name: "memory",
           time: getTimestamp(),
-          status: STATUS_CODE.OK,
-          memory: {
-            jsHeapSizeLimit: memory?.jsHeapSizeLimit,
-            totalJSHeapSize: memory?.totalJSHeapSize,
-            usedJSHeapSize: memory?.usedJSHeapSize,
+          data: {
+            memory: {
+              jsHeapSizeLimit: memory?.jsHeapSizeLimit,
+              totalJSHeapSize: memory?.totalJSHeapSize,
+              usedJSHeapSize: memory?.usedJSHeapSize,
+            },
           },
+          status: STATUS_CODE.OK,
         });
       }
     });
