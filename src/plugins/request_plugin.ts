@@ -179,7 +179,14 @@ export class RequestPlugin {
         time: xhrData.time,
         status: STATUS_CODE.ERROR,
       });
-      this.reportData.send(xhrData);
+      this.reportData.send({
+        type,
+        category: this.breadcrumb.getCategory(type),
+        data: { ...result },
+        time: xhrData.time,
+        name: "httpError",
+        status: STATUS_CODE.ERROR,
+      });
     }
   }
   handleTransForm(data: HttpData) {

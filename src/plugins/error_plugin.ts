@@ -61,6 +61,7 @@ export class ErrorPlugin implements ReplacePlugin {
       const errorData = {
         type: EVENT_TYPE.ERROR,
         status: STATUS_CODE.ERROR,
+        name: "error",
         time: getTimestamp(),
         data: {
           message: ev.message,
