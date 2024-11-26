@@ -11,7 +11,7 @@ import {
 } from "../utils";
 import ErrorStackParser from "error-stack-parser";
 import { IPluginParams, ReplacePlugin } from "./common";
-import { IOptionsParams } from "../core/options";
+import { IOptionsParams } from "../typings/options";
 
 export class ErrorPlugin implements ReplacePlugin {
   name = PLUGIN_TYPE.ERROR_PLUGIN;

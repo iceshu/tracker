@@ -1,12 +1,12 @@
-import { onLCP, onFID, onCLS, onFCP, onTTFB } from "web-vitals";
-import { EVENT_TYPE, PLUGIN_TYPE, STATUS_CODE } from "../core/constant";
+import { onCLS, onFCP, onFID, onLCP, onTTFB } from "web-vitals";
 import { Breadcrumb } from "../core/breadcrumb";
-import { ReportDataController } from "../core/report";
-import { IPluginParams } from "./common";
+import { EVENT_TYPE, PLUGIN_TYPE, STATUS_CODE } from "../core/constant";
 import { _global } from "../core/global";
+import { ReportDataController } from "../core/report";
 import { Callback } from "../core/typing";
-import { addEventListenerTo, getLocationHref, getTimestamp } from "../utils";
-import { IOptionsParams } from "../core/options";
+import { IOptionsParams } from "../typings/options";
+import { addEventListenerTo, getTimestamp } from "../utils";
+import { IPluginParams } from "./common";
 
 export class PerformancePlugin implements IPluginParams {
   name = PLUGIN_TYPE.PERFORMANCE_PLUGIN;

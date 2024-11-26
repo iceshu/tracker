@@ -1,9 +1,9 @@
 import { Breadcrumb } from "../core/breadcrumb";
 import { EVENT_TYPE, PLUGIN_TYPE, STATUS_CODE } from "../core/constant";
 import { _global } from "../core/global";
-import { IOptionsParams } from "../core/options";
 import { ReportDataController } from "../core/report";
 import { voidFun } from "../core/typing";
+import { IOptionsParams } from "../typings/options";
 import { getLocationHref, getTimestamp, parseUrlToObj } from "../utils";
 import { IPluginParams, ReplacePlugin } from "./common";
 

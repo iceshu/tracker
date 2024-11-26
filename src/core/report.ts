@@ -5,7 +5,8 @@ import { EVENT_TYPE } from "./constant";
 import { Breadcrumb } from "./breadcrumb";
 import { ISendData, ReportData } from "./typing";
 import { IPluginParams } from "../plugins/common";
-import { IOptionsParams } from "./options";
+import { IOptionsParams } from "../typings/options";
+import { SessionManager } from "./session-manager";
 export class ReportDataController {
   queue: Queue = new Queue(); // 消息队列
   apikey = ""; // 每个项目对应的唯一标识
@@ -15,16 +16,18 @@ export class ReportDataController {
   beforeDataReport: any; // 上报数据前的hook
   getUserId: any; // 用户自定义获取userId的方法
   useImgUpload = false; // 是否使用图片打点上报
-  recordScreenId: any;
   breadcrumb: Breadcrumb;
   options: IOptionsParams;
+  baseDeviceInfo = {};
+
   constructor(params: Omit<IPluginParams, "reportData">) {
-    const { options, breadcrumb } = params;
+    const { options, breadcrumb, baseDeviceInfo } = params;
     this.breadcrumb = breadcrumb;
     this.uuid = generateUUID();
     this.dns = options.dns;
     this.apikey = options?.apikey;
     this.options = options;
+    this.baseDeviceInfo = baseDeviceInfo;
     this.beforeDataReport = options?.beforeDataReport;
   }
   beacon(url: string, json: any): boolean {
@@ -97,7 +100,8 @@ export class ReportDataController {
       uuid: this.uuid,
       releaseVersion: this.options?.version,
       pageUrl: getLocationHref(),
-      deviceInfo: Global.deviceInfo, // 获取设备信息
+      deviceInfo: Global.deviceInfo,
+      sessionID: SessionManager.getSessionId(),
     };
 
     // 性能数据、录屏、白屏检测等不需要附带用户行为
@@ -136,6 +140,7 @@ export class ReportDataController {
     data.apiKey = this.apikey;
     data.pageUrl = getLocationHref();
     const result = (await this.beforePost(data)) as ReportData;
+
     if (result) {
       // 优先使用sendBeacon 上报，若数据量大，再使用图片打点上报和fetch上报
       const value = this.beacon(dsn, result);

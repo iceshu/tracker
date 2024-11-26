@@ -1,11 +1,12 @@
 import { Breadcrumb } from "../core/breadcrumb";
-import { IOptionsParams, ViewModel } from "../core/options";
+import { ViewModel } from "../core/options";
 import { ReportDataController } from "../core/report";
 import { IPluginParams } from "./common";
 import { _global } from "../core/global";
 import { getLocationHref, getTimestamp, isObject } from "../utils";
 import { EVENT_TYPE } from "../core/constant";
 import { IAnyObject } from "../core/typing";
+import { IOptionsParams } from "../typings/options";
 
 export class VuePlugin {
   options: IOptionsParams;
@@ -72,7 +73,7 @@ export function vue2VmHandler(vm: ViewModel) {
   } else {
     const name = vm._isVue
       ? (vm.$options && vm.$options.name) ||
-        (vm.$options && vm.$options._componentTag)
+      (vm.$options && vm.$options._componentTag)
       : vm.name;
     componentName =
       (name ? "component <" + name + ">" : "anonymous component") +

@@ -1,5 +1,15 @@
-import { IAnyObject } from "./typing";
+import { IAnyObject } from "./common";
 
+export interface IOptionsParams {
+  dns: string;
+  version?: string;
+  filterXhrUrlRegExp?: RegExp;
+  [key: string]: any;
+  beforeDataReport?: (T: any) => any;
+  vue?: VueInstance;
+  handleHttpStatus?: (T: any) => boolean;
+  throttleDelayTime?: 0;
+}
 
 export interface VueInstance {
   // fix in Vue3 typescript's declaration file error

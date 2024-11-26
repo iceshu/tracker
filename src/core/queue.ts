@@ -8,8 +8,6 @@ export class Queue {
   constructor() {
     this.stack = [];
     this.isFlushing = false;
-
-    // 在这里添加代码，实现单例模式
   }
 
   static getInstance(): Queue {
@@ -57,4 +55,3 @@ export class Queue {
   }
 }
 
-// 使用单例模式

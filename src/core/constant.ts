@@ -1,3 +1,8 @@
+
+export const SDK = {
+  VERSION: "0.0.1",
+}
+
 /**
  * 事件类型
  */

@@ -4,7 +4,7 @@ import { IPluginParams, ReplacePlugin } from "./common";
 import { _global } from "../core/global";
 import { EVENT_TYPE, PLUGIN_TYPE, STATUS_CODE } from "../core/constant";
 import { getTimestamp, replaceAop } from "../utils";
-import { IOptionsParams } from "../core/options";
+import { IOptionsParams } from "../typings/options";
 
 export class ConsolePlugin implements ReplacePlugin {
   name = PLUGIN_TYPE.CONSOLE_PLUGIN;

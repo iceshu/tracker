@@ -1,15 +1,14 @@
 import { Breadcrumb } from "../core/breadcrumb";
 import {
-  BREADCRUMB_TYPE,
   EMethods,
   EVENT_TYPE,
   HTTP_CODE,
-  STATUS_CODE,
+  STATUS_CODE
 } from "../core/constant";
 import { _global } from "../core/global";
-import { IOptionsParams } from "../core/options";
 import { ReportDataController } from "../core/report";
-import { HttpData, TRACKERHttpRequest, voidFun } from "../core/typing";
+import { HttpData, voidFun } from "../core/typing";
+import { IOptionsParams } from "../typings/options";
 import {
   addEventListenerTo,
   fromHttpStatus,
@@ -217,9 +216,8 @@ export class RequestPlugin {
           status = STATUS_CODE.OK;
         } else {
           status = STATUS_CODE.ERROR;
-          message = `接口报错，报错信息为：${
-            typeof response == "object" ? JSON.stringify(response) : response
-          }`;
+          message = `接口报错，报错信息为：${typeof response == "object" ? JSON.stringify(response) : response
+            }`;
         }
       }
     } else {

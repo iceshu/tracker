@@ -105,12 +105,12 @@ export interface RecordScreen {
  */
 export interface ReportData
   extends HttpData,
-    ResourceError,
-    LongTask,
-    PerformanceData,
-    MemoryData,
-    CodeError,
-    RecordScreen {
+  ResourceError,
+  LongTask,
+  PerformanceData,
+  MemoryData,
+  CodeError,
+  RecordScreen {
   type: string; // 事件类型
   pageUrl: string; // 页面地址
   time: number; // 发生时间
@@ -217,15 +217,6 @@ export interface Window {
   performance: any;
 }
 
-export abstract class BasePlugin {
-  public type: string; // 插件类型
-  constructor(type: string) {
-    this.type = type;
-  }
-  abstract bindOptions(options: object): void; // 校验参数
-  abstract core(sdkBase: SdkBase): void; // 核心方法
-  abstract transform(data: any): void; // 数据转化
-}
 
 export interface TRACKERHttpRequest extends XMLHttpRequest {
   [key: string]: any;

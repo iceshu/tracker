@@ -1,19 +1,19 @@
+import { BasePlugin } from "../typings/base";
+import { IOptionsParams } from "../typings/options";
 import { getTimestamp, readonly } from "../utils";
 import { Breadcrumb } from "./breadcrumb";
 import { EVENT_TYPE, PLUGIN_TYPE, STATUS_CODE } from "./constant";
 import { Global } from "./global";
-import { IOptionsParams } from "./options";
 import { ReportDataController } from "./report";
 
-export class BaseClient {
-  #reportData: ReportDataController;
-  #plugins: Array<any>;
-  #options: IOptionsParams;
+export class BaseBrowserClient {
   #breadcrumb: Breadcrumb;
-  #registeredPlugins: WeakMap<any, any>;
-  constructor(options: IOptionsParams, plugins: Array<any>) {
+  #options: IOptionsParams;
+  #reportData: ReportDataController;
+  #registeredPlugins: Map<string, BasePlugin>;
+  #baseDeviceInfo = {}
+  constructor(options: IOptionsParams, plugins: BasePlugin[]) {
     this.#options = readonly(options);
-    this.#plugins = plugins;
     this.#registeredPlugins = new Map();
     const { maxBreadcrumbs = 20, beforePushBreadcrumb } = options;
     this.#breadcrumb = new Breadcrumb(maxBreadcrumbs, beforePushBreadcrumb);
@@ -24,10 +24,27 @@ export class BaseClient {
     Global.options = options;
     Global.breadcrumb = this.#breadcrumb;
     Global.reportData = this.#reportData;
-    this.#setupPlugins();
+    this.initializePlugins(plugins);
   }
-  get breadcrumbList() {
-    return this.#breadcrumb;
+
+  protected initializePlugins(plugins: BasePlugin[]): void {
+    const PluginPrams = {
+      breadcrumb: this.#breadcrumb,
+      options: this.#options,
+      reportData: this.#reportData,
+      baseDeviceInfo: this.#baseDeviceInfo,
+      setBaseDeviceInfo: (deviceInfo: any) => {
+        this.#baseDeviceInfo = deviceInfo;
+
+      }
+    };
+    Global.plugins = plugins.map((Plugin: any) => {
+      const plugin = new Plugin(PluginPrams);
+      this.#registeredPlugins.set(plugin.name, plugin);
+    });
+  }
+  getOptions(): Readonly<IOptionsParams> {
+    throw this.#options;
   }
   log(value: any) {
     this.#reportData?.send({
@@ -43,18 +60,7 @@ export class BaseClient {
 
   errorBoundary(err: Error) {
     const errorPlugin = this.#registeredPlugins.get(PLUGIN_TYPE.ERROR_PLUGIN);
+    //@ts-ignore
     errorPlugin?.handleError(err);
-  }
-
-  #setupPlugins() {
-    const PluginPrams = {
-      breadcrumb: this.#breadcrumb,
-      options: this.#options,
-      reportData: this.#reportData,
-    };
-    Global.plugins = this.#plugins.map((Plugin: any) => {
-      const plugin = new Plugin(PluginPrams);
-      this.#registeredPlugins.set(plugin.name, plugin);
-    });
   }
 }

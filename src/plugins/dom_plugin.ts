@@ -5,9 +5,10 @@ import {
   PLUGIN_TYPE,
   STATUS_CODE,
 } from "../core/constant";
+
 import { Global, _global } from "../core/global";
-import { IOptionsParams } from "../core/options";
 import { ReportDataController } from "../core/report";
+import { IOptionsParams } from "../typings/options";
 import {
   addEventListenerTo,
   getTimestamp,
@@ -35,7 +36,7 @@ export class DomPlugin implements ReplacePlugin {
   }
   initDeviceInfo() {
     const uaResult = new UAParser().getResult();
-    Global.deviceInfo = {
+    const deviceInfo = {
       browserVersion: uaResult.browser.version, // // 浏览器版本号 107.0.0.0
       browser: uaResult.browser.name, // 浏览器类型 Chrome
       osVersion: uaResult.os.version, // 操作系统 电脑系统 10
@@ -44,6 +45,7 @@ export class DomPlugin implements ReplacePlugin {
       device: uaResult.device.model ? uaResult.device.model : "Unknow",
       device_type: uaResult.device.type ? uaResult.device.type : "Pc",
     };
+    Global.deviceInfo = deviceInfo;
   }
   replace(): void {
     if (!("document" in _global)) return;

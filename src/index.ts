@@ -7,8 +7,9 @@ import {
   VuePlugin,
   RequestPlugin,
 } from "./plugins";
-import { IOptionsParams, ViewModel, VueInstance } from "./core/options";
-import { BaseClient } from "./core";
+import { ViewModel, VueInstance } from "./core/options";
+import { BaseBrowserClient } from "./core";
+import { IOptionsParams } from "./typings/options";
 const defaultPlugins: any = [
   RequestPlugin,
   DomPlugin,
@@ -17,12 +18,11 @@ const defaultPlugins: any = [
   ConsolePlugin,
   PerformancePlugin,
 ];
-const GLOBAL: any = window;
 export const TrackInit = (rawOptions: IOptionsParams) => {
   if (rawOptions.vue) {
     defaultPlugins.push(VuePlugin);
   }
-  const baseClient = new BaseClient(rawOptions, defaultPlugins);
+  const baseClient = new BaseBrowserClient(rawOptions, defaultPlugins);
   return baseClient;
 };
 export function install(Vue: VueInstance, rawOptions: IOptionsParams) {

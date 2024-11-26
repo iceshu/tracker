@@ -1,5 +1,5 @@
+import { IOptionsParams } from "../typings/options";
 import { Breadcrumb } from "./breadcrumb";
-import { IOptionsParams } from "./options";
 
 export const _global = window;
 export class Global {
