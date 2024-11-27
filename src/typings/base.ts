@@ -5,11 +5,9 @@ import { ReportData } from "./common";
 import { IOptionsParams } from "./options";
 
 export abstract class BasePlugin {
-    protected client: BaseClient;
     abstract name: string;
 
-    constructor(client: BaseClient) {
-        this.client = client;
+    constructor() {
     }
 
     // 插件生命周期钩子

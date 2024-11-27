@@ -3,6 +3,7 @@ import {
   EMethods,
   EVENT_TYPE,
   HTTP_CODE,
+  PLUGIN_TYPE,
   STATUS_CODE
 } from "../core/constant";
 import { _global } from "../core/global";
@@ -18,6 +19,7 @@ import {
 } from "../utils";
 import { HTTP_TYPE, IPluginParams } from "./common";
 export class RequestPlugin {
+  name = PLUGIN_TYPE.REQUEST_PLUGIN;
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;

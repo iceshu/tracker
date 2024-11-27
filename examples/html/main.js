@@ -1,6 +1,13 @@
 import { TrackInit } from "../../dist/track.esm.js";
 const tt = TrackInit({
-  dns: "https://example.com/app-id",
+  dns: "https://hapi.akool.io/monitor/collect",
+  supportPlugins: [
+    "RequestPlugin",
+    "DomPlugin",
+    "HistoryPlugin",
+    "ErrorPlugin",
+    "ConsolePlugin",
+    "PerformancePlugin",
+  ],
 });
-console.log("tt", tt);
 window.tt = tt;

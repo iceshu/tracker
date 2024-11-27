@@ -9,6 +9,7 @@ export interface IOptionsParams {
   vue?: VueInstance;
   handleHttpStatus?: (T: any) => boolean;
   throttleDelayTime?: 0;
+  supportPlugins?: string[];
 }
 
 export interface VueInstance {

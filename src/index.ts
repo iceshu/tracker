@@ -1,16 +1,17 @@
-import {
-  DomPlugin,
-  ConsolePlugin,
-  HistoryPlugin,
-  ErrorPlugin,
-  PerformancePlugin,
-  VuePlugin,
-  RequestPlugin,
-} from "./plugins";
-import { ViewModel, VueInstance } from "./core/options";
 import { BaseBrowserClient } from "./core";
+import { VueInstance } from "./core/options";
+import {
+  ConsolePlugin,
+  DomPlugin,
+  ErrorPlugin,
+  HistoryPlugin,
+  PerformancePlugin,
+  RequestPlugin,
+  VuePlugin
+} from "./plugins";
+import { BasePlugin } from "./typings/base";
 import { IOptionsParams } from "./typings/options";
-const defaultPlugins: any = [
+let defaultPlugins: BasePlugin[] = [
   RequestPlugin,
   DomPlugin,
   HistoryPlugin,
@@ -19,6 +20,11 @@ const defaultPlugins: any = [
   PerformancePlugin,
 ];
 export const TrackInit = (rawOptions: IOptionsParams) => {
+
+  const supportPlugins = rawOptions.supportPlugins || [];
+  if (supportPlugins.length) {
+    defaultPlugins = defaultPlugins.filter((item) => supportPlugins.includes(item.name));
+  }
   if (rawOptions.vue) {
     defaultPlugins.push(VuePlugin);
   }
@@ -36,3 +42,4 @@ export function install(Vue: VueInstance, rawOptions: IOptionsParams) {
   };
 }
 export default { install, TrackInit };
+export * from "./typings/base";
