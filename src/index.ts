@@ -11,24 +11,25 @@ import {
 } from "./plugins";
 import { BasePlugin } from "./typings/base";
 import { IOptionsParams } from "./typings/options";
-let defaultPlugins: BasePlugin[] = [
-  RequestPlugin,
-  DomPlugin,
-  HistoryPlugin,
-  ErrorPlugin,
-  ConsolePlugin,
-  PerformancePlugin,
-];
-export const TrackInit = (rawOptions: IOptionsParams) => {
+const pluginMap: Record<string, BasePlugin> = {
+  'RequestPlugin': RequestPlugin,
+  'DomPlugin': DomPlugin,
+  'HistoryPlugin': HistoryPlugin,
+  'ErrorPlugin': ErrorPlugin,
+  'ConsolePlugin': ConsolePlugin,
+  "PerformancePlugin": PerformancePlugin
+}
 
+export const TrackInit = (rawOptions: IOptionsParams) => {
   const supportPlugins = rawOptions.supportPlugins || [];
-  if (supportPlugins.length) {
-    defaultPlugins = defaultPlugins.filter((item) => supportPlugins.includes(item.name));
-  }
+  const currentPlugins = supportPlugins.map(e => {
+    const plugin = pluginMap[e]
+    return plugin;
+  }).filter(Boolean);
   if (rawOptions.vue) {
-    defaultPlugins.push(VuePlugin);
+    currentPlugins.push(VuePlugin);
   }
-  const baseClient = new BaseBrowserClient(rawOptions, defaultPlugins);
+  const baseClient = new BaseBrowserClient(rawOptions, currentPlugins);
   return baseClient;
 };
 export function install(Vue: VueInstance, rawOptions: IOptionsParams) {

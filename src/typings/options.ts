@@ -1,7 +1,7 @@
 import { IAnyObject } from "./common";
 
 export interface IOptionsParams {
-  dns: string;
+  dsn: string;
   version?: string;
   filterXhrUrlRegExp?: RegExp;
   [key: string]: any;

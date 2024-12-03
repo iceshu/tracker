@@ -11,7 +11,7 @@ const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 app.use(Tracker, {
-  dns: 'http://localhost:4001/log'
+  dsn: 'http://localhost:4001/log'
 })
 
 app.mount('#app')

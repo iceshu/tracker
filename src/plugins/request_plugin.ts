@@ -162,6 +162,9 @@ export class RequestPlugin {
       Status === HTTP_CODE.BAD_REQUEST ||
       Status > HTTP_CODE.UNAUTHORIZED;
     const result = this.handleTransForm(xhrData);
+    if (!url) {
+      return;
+    }
     if (!url.includes(this.options.dsn)) {
       const category = this.breadcrumb.getCategory(type);
       this.breadcrumb.push({

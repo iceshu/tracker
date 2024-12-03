@@ -21,6 +21,7 @@ export class BaseBrowserClient {
       options,
       breadcrumb: this.#breadcrumb,
     });
+
     Global.options = options;
     Global.breadcrumb = this.#breadcrumb;
     Global.reportData = this.#reportData;

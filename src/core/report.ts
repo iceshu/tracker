@@ -10,7 +10,7 @@ import { SessionManager } from "./session-manager";
 export class ReportDataController {
   queue: Queue = new Queue(); // 消息队列
   apikey = ""; // 每个项目对应的唯一标识
-  dns = ""; // 监控上报接口的地址
+  dsn = ""; // 监控上报接口的地址
   userId = ""; // 用户id
   uuid: string; // 每次页面加载的唯一标识
   beforeDataReport: any; // 上报数据前的hook
@@ -24,7 +24,7 @@ export class ReportDataController {
     const { options, breadcrumb, baseDeviceInfo } = params;
     this.breadcrumb = breadcrumb;
     this.uuid = generateUUID();
-    this.dns = options.dns;
+    this.dsn = options.dsn;
     this.apikey = options?.apikey;
     this.options = options;
     this.baseDeviceInfo = baseDeviceInfo;
@@ -118,7 +118,7 @@ export class ReportDataController {
   // 判断请求是否为SDK配置的接口
   isSdkTransportUrl(targetUrl: string): boolean {
     let isSdkDsn = false;
-    if (this.dns && targetUrl.indexOf(this.dns) !== -1) {
+    if (this.dsn && targetUrl.indexOf(this.dsn) !== -1) {
       isSdkDsn = true;
     }
     return isSdkDsn;
@@ -131,7 +131,7 @@ export class ReportDataController {
   }
   // 上报数据
   async send(data: ISendData) {
-    const dsn = this.dns;
+    const dsn = this.dsn;
     if (isEmpty(dsn)) {
       console.error("dsn为空，没有传入监控错误上报的dsn地址，请在init中传入");
       return;

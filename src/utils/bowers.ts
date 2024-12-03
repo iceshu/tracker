@@ -8,9 +8,8 @@ export function htmlElementAsString(target: HTMLElement): string {
   classNames = classNames !== "" ? ` class='${classNames}'` : "";
   const id = target.id ? ` id="${target.id}"` : "";
   const innerText = target.innerText;
-  return `<${tagName}${id}${
-    classNames !== "" ? classNames : ""
-  }>${innerText}</${tagName}>`;
+  return `<${tagName}${id}${classNames !== "" ? classNames : ""
+    }>${innerText}</${tagName}>`;
 }
 export function parseUrlToObj(url: string) {
   if (!url) {
