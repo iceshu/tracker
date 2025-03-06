@@ -10,6 +10,8 @@ export interface IOptionsParams {
   handleHttpStatus?: (T: any) => boolean;
   throttleDelayTime?: 0;
   supportPlugins?: string[];
+  getUserId?: () => string | number;
+  wrapElementCallback?: (element: HTMLElement) => void;
 }
 
 export interface VueInstance {

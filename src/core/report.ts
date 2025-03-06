@@ -27,6 +27,7 @@ export class ReportDataController {
     this.dsn = options.dsn;
     this.apikey = options?.apikey;
     this.options = options;
+    this.getUserId = options?.getUserId;
     this.baseDeviceInfo = baseDeviceInfo;
     this.beforeDataReport = options?.beforeDataReport;
   }

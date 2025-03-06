@@ -8,11 +8,7 @@ import {
 import { Global, _global } from "../core/global";
 import { ReportDataController } from "../core/report";
 import { IOptionsParams } from "../typings/options";
-import {
-  getTimestamp,
-  htmlElementAsString,
-  throttle,
-} from "../utils";
+import { getTimestamp, htmlElementAsString, throttle } from "../utils";
 import { IPluginParams, ReplacePlugin } from "./common";
 import { UAParser } from "ua-parser-js";
 
@@ -51,6 +47,7 @@ export class DomPlugin implements ReplacePlugin {
 
   private handleClick = (event: MouseEvent) => {
     const target = event.target as HTMLElement;
+    const { wrapElementCallback } = this.options;
     if (!target) return;
 
     // 获取事件触发路径
@@ -58,7 +55,7 @@ export class DomPlugin implements ReplacePlugin {
     if (!path?.length) return;
 
     // 查找最近的可交互元素
-    const interactiveElement = path.find(element => {
+    const interactiveElement = path.find((element) => {
       if (element instanceof HTMLElement) {
         // 检查是否是可交互元素
         return this.isInteractiveElement(element);
@@ -67,6 +64,7 @@ export class DomPlugin implements ReplacePlugin {
     });
 
     const elementToTrack = interactiveElement || target;
+    wrapElementCallback?.(elementToTrack);
     if (elementToTrack instanceof HTMLElement) {
       this.recordClick(elementToTrack, event);
     }
@@ -74,17 +72,24 @@ export class DomPlugin implements ReplacePlugin {
 
   private isInteractiveElement(element: HTMLElement): boolean {
     // 检查元素是否是可交互的
-    const interactiveTags = ['a', 'button', 'input', 'select', 'textarea'];
-    const interactiveRoles = ['button', 'link', 'menuitem', 'tab', 'checkbox', 'radio'];
+    const interactiveTags = ["a", "button", "input", "select", "textarea"];
+    const interactiveRoles = [
+      "button",
+      "link",
+      "menuitem",
+      "tab",
+      "checkbox",
+      "radio",
+    ];
 
-    const elementRole = element.getAttribute('role');
+    const elementRole = element.getAttribute("role");
 
     return !!(
       interactiveTags.includes(element.tagName.toLowerCase()) ||
       (elementRole !== null && interactiveRoles.includes(elementRole)) ||
       element.onclick !== null ||
-      element.getAttribute('onClick') !== null ||
-      element.hasAttribute('data-clickable') ||
+      element.getAttribute("onClick") !== null ||
+      element.hasAttribute("data-clickable") ||
       (element.className && /(?:btn|button|clickable)/i.test(element.className))
     );
   }
@@ -96,8 +101,8 @@ export class DomPlugin implements ReplacePlugin {
       className: element.className || undefined,
       textContent: element.textContent?.trim().slice(0, 50) || undefined,
       href: element instanceof HTMLAnchorElement ? element.href : undefined,
-      type: element.getAttribute('type') || undefined,
-      name: element.getAttribute('name') || undefined,
+      type: element.getAttribute("type") || undefined,
+      name: element.getAttribute("name") || undefined,
       value: element instanceof HTMLInputElement ? element.value : undefined,
       dataAttributes: this.getDataAttributes(element),
     };
@@ -105,8 +110,8 @@ export class DomPlugin implements ReplacePlugin {
 
   private getDataAttributes(element: HTMLElement) {
     const dataAttrs: Record<string, string> = {};
-    Array.from(element.attributes).forEach(attr => {
-      if (attr.name.startsWith('data-')) {
+    Array.from(element.attributes).forEach((attr) => {
+      if (attr.name.startsWith("data-")) {
         dataAttrs[attr.name] = attr.value;
       }
     });
@@ -130,7 +135,7 @@ export class DomPlugin implements ReplacePlugin {
           y: event.clientY,
           pageX: event.pageX,
           pageY: event.pageY,
-        }
+        },
       },
       time: getTimestamp(),
       status: STATUS_CODE.OK,
@@ -140,21 +145,24 @@ export class DomPlugin implements ReplacePlugin {
   replace(): void {
     if (!("document" in _global)) return;
 
-    const throttledHandler = throttle(this.handleClick, this.options.throttleDelayTime || 0);
+    const throttledHandler = throttle(
+      this.handleClick,
+      this.options.throttleDelayTime || 0
+    );
 
     // 使用 useCapture 为 true 确保在事件冒泡之前捕获事件
-    document.addEventListener('click', throttledHandler, true);
+    document.addEventListener("click", throttledHandler, true);
 
     // 为了处理动态加载的内容，也监听document.body的变化
-    if (typeof MutationObserver !== 'undefined') {
+    if (typeof MutationObserver !== "undefined") {
       const observer = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
-          if (mutation.type === 'childList' && mutation.addedNodes.length) {
+          if (mutation.type === "childList" && mutation.addedNodes.length) {
             // 如果有新节点添加，确保它们也能被监听
             mutation.addedNodes.forEach((node) => {
               if (node instanceof HTMLElement) {
                 // 可以在这里对新添加的元素做特殊处理
-                node.addEventListener('click', throttledHandler, true);
+                node.addEventListener("click", throttledHandler, true);
               }
             });
           }
@@ -163,16 +171,8 @@ export class DomPlugin implements ReplacePlugin {
 
       observer.observe(document.body, {
         childList: true,
-        subtree: true
+        subtree: true,
       });
-    }
-
-    // 支持 React 的 Portal
-    if (typeof window !== 'undefined') {
-      const portalRoot = document.getElementById('portal-root');
-      if (portalRoot) {
-        portalRoot.addEventListener('click', throttledHandler, true);
-      }
     }
   }
 }
