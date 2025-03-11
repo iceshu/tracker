@@ -1,10 +1,9 @@
 import typescript from "@rollup/plugin-typescript";
 import json from "@rollup/plugin-json";
 import pkg from "./package.json" assert { type: "json" };
-import resolve from "rollup-plugin-node-resolve";
-import commonjs from "rollup-plugin-commonjs";
-import { uglify } from "rollup-plugin-uglify";
-import { terser } from "rollup-plugin-terser";
+import resolve from "@rollup/plugin-node-resolve";
+import commonjs from "@rollup/plugin-commonjs";
+import terser from "@rollup/plugin-terser";
 const name = "__TC_TRACKER__";
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -13,7 +12,6 @@ const plugins = [
   json(),
   resolve(),
   commonjs(),
-  isProduction && uglify(),
   isProduction && terser(),
 ].filter(Boolean);
 
@@ -40,4 +38,3 @@ export default {
   ],
   plugins: plugins,
 };
-console.log("111111111", process.env.NODE_ENV);

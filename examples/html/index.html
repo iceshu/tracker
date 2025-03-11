@@ -12,13 +12,14 @@
     <script type="module" src="./main.js"></script>
     <script>
       document.querySelector("#btn").addEventListener("click", () => {
-        // requestTest();
-        console.log(a);
+        requestTest();
+        // console.log(a);
+        // fetch("https://k.clarity.ms/collect", { data });
       });
       function requestTest(params) {
         const xhr = new XMLHttpRequest();
         // 设置请求方法和URL
-        xhr.open("POST", "/server", true);
+        xhr.open("POST", "https://k.clarity.ms/collect", true);
 
         // 设置请求头
         xhr.setRequestHeader(

@@ -4,7 +4,7 @@ import {
   EVENT_TYPE,
   HTTP_CODE,
   PLUGIN_TYPE,
-  STATUS_CODE
+  STATUS_CODE,
 } from "../core/constant";
 import { _global } from "../core/global";
 import { ReportDataController } from "../core/report";
@@ -59,7 +59,7 @@ export class RequestPlugin {
           if (
             (method === EMethods.Post &&
               _this.reportData?.isSdkTransportUrl?.(url)) ||
-            _this.reportData?.isSdkTransportUrl?.(url)
+            _this.reportData?.isFilterHttpUrl?.(url)
           )
             return;
           const { responseType, response, status } = this;
@@ -221,8 +221,9 @@ export class RequestPlugin {
           status = STATUS_CODE.OK;
         } else {
           status = STATUS_CODE.ERROR;
-          message = `接口报错，报错信息为：${typeof response == "object" ? JSON.stringify(response) : response
-            }`;
+          message = `接口报错，报错信息为：${
+            typeof response == "object" ? JSON.stringify(response) : response
+          }`;
         }
       }
     } else {
