@@ -105,12 +105,12 @@ export interface RecordScreen {
  */
 export interface ReportData
   extends HttpData,
-  ResourceError,
-  LongTask,
-  PerformanceData,
-  MemoryData,
-  CodeError,
-  RecordScreen {
+    ResourceError,
+    LongTask,
+    PerformanceData,
+    MemoryData,
+    CodeError,
+    RecordScreen {
   type: string; // 事件类型
   pageUrl: string; // 页面地址
   time: number; // 发生时间
@@ -166,9 +166,7 @@ export interface BreadcrumbData {
 }
 
 export interface ErrorTarget {
-  target?: {
-    localName?: string;
-  };
+  target?: HTMLElement;
   error?: any;
   message?: string;
 }
@@ -216,7 +214,6 @@ export interface Window {
   onpopstate: any;
   performance: any;
 }
-
 
 export interface TRACKERHttpRequest extends XMLHttpRequest {
   [key: string]: any;

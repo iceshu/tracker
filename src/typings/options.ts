@@ -4,6 +4,7 @@ export interface IOptionsParams {
   dsn: string;
   version?: string;
   filterXhrUrlRegExp?: RegExp;
+  skipLocalName?: (e: HTMLElement) => boolean;
   [key: string]: any;
   beforeDataReport?: (T: any) => any;
   vue?: VueInstance;

@@ -1,5 +1,10 @@
 import { Breadcrumb } from "../core/breadcrumb";
-import { EVENT_TYPE, PLUGIN_TYPE, STATUS_CODE } from "../core/constant";
+import {
+  BREADCRUMB_TYPE,
+  EVENT_TYPE,
+  PLUGIN_TYPE,
+  STATUS_CODE,
+} from "../core/constant";
 import { _global } from "../core/global";
 import { ReportDataController } from "../core/report";
 import { ErrorTarget, ResourceError, ResourceTarget } from "../core/typing";
@@ -88,10 +93,13 @@ export class ErrorPlugin implements ReplacePlugin {
         return this.reportData.send(errorData as any);
       }
     }
-
     // 资源加载报错
     if (target?.localName) {
+      const { skipLocalName } = this.options;
       // 提取资源加载的信息
+      if (skipLocalName?.(target)) {
+        return;
+      }
       const data = resourceTransform(target);
       this.breadcrumb.push({
         type: EVENT_TYPE.RESOURCE,
@@ -102,7 +110,7 @@ export class ErrorPlugin implements ReplacePlugin {
       });
       return this.reportData.send({
         data,
-        name: "resource_error",
+        name: BREADCRUMB_TYPE.RESOURCE,
         type: EVENT_TYPE.RESOURCE,
         status: STATUS_CODE.ERROR,
         time: getTimestamp(),
@@ -160,8 +168,8 @@ export function resourceTransform(target: ResourceTarget): ResourceError {
   return {
     time: getTimestamp(),
     message:
-      (interceptStr(target.src as string, 120) ||
-        interceptStr(target.href as string, 120)) + "; 资源加载失败",
+      (interceptStr(target.src as string, 1000) ||
+        interceptStr(target.href as string, 1000)) + "; 资源加载失败",
     name: target.localName as string,
   };
 }
