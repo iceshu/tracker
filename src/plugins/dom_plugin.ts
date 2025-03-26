@@ -150,29 +150,7 @@ export class DomPlugin implements ReplacePlugin {
       this.options.throttleDelayTime || 0
     );
 
-    // 使用 useCapture 为 true 确保在事件冒泡之前捕获事件
+    // 使用 useCapture 为 true 确保在事件冒泡之前捕获事件，可以捕获所有元素的点击，包括动态添加的元素
     document.addEventListener("click", throttledHandler, true);
-
-    // 为了处理动态加载的内容，也监听document.body的变化
-    if (typeof MutationObserver !== "undefined") {
-      const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-          if (mutation.type === "childList" && mutation.addedNodes.length) {
-            // 如果有新节点添加，确保它们也能被监听
-            mutation.addedNodes.forEach((node) => {
-              if (node instanceof HTMLElement) {
-                // 可以在这里对新添加的元素做特殊处理
-                node.addEventListener("click", throttledHandler, true);
-              }
-            });
-          }
-        });
-      });
-
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-      });
-    }
   }
 }
