@@ -208,7 +208,7 @@ export class RequestPlugin {
     if (Status === 0) {
       status = STATUS_CODE.ERROR;
       message =
-        elapsedTime <= this.options.overTime * 1000
+        elapsedTime <= (this.options.overTime || 5) * 1000
           ? `请求失败，Status值为:${Status}`
           : "请求失败，接口超时";
     } else if ((Status as number) < HTTP_CODE.BAD_REQUEST) {

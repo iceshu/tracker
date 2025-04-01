@@ -12,6 +12,7 @@ export interface IOptionsParams {
   throttleDelayTime?: 0;
   supportPlugins?: string[];
   getUserId?: () => string | number;
+  overTime?: number;
   wrapElementCallback?: (element: HTMLElement) => void;
 }
 
