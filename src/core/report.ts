@@ -118,17 +118,10 @@ export class ReportDataController {
   }
   // 判断请求是否为SDK配置的接口
   isSdkTransportUrl(targetUrl: string): boolean {
-    let isSdkDsn = false;
-    if (this.dsn && targetUrl.indexOf(this.dsn) !== -1) {
-      isSdkDsn = true;
-    }
-    return isSdkDsn;
+    return !!(this.dsn && targetUrl.includes(this.dsn));
   }
   isFilterHttpUrl(url: string): boolean {
-    return !!(
-      this.options.filterXhrUrlRegExp &&
-      this.options.filterXhrUrlRegExp.test(url)
-    );
+    return Boolean(this.options.filterXhrUrlRegExp?.test(url));
   }
   // 上报数据
   async send(data: ISendData) {

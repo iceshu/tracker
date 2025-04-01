@@ -12,7 +12,7 @@
   "umd": "dist/track.umd.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "test": "vitest",
+    "test": "vitest ",
     "build": "cross-env NODE_ENV=production rollup -c rollup.config.mjs",
     "dev:watch": "npm run dev && yalc push --watch",
     "watch:yalc": "yalc push --watch",
@@ -34,6 +34,7 @@
     "@rollup/plugin-typescript": "^11.1.6",
     "@types/ua-parser-js": "^0.7.39",
     "error-stack-parser": "^2.1.4",
+    "happy-dom": "^17.4.4",
     "rollup": "^4.12.1",
     "tslib": "^2.6.2",
     "typescript": "^5.4.2",
