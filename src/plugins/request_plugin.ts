@@ -18,11 +18,44 @@ import {
   replaceAop,
 } from "../utils";
 import { HTTP_TYPE, IPluginParams } from "./common";
+
+// 请求数据接口
+interface RequestRecord {
+  method: string;
+  url: string;
+  sTime: number;
+  type: string;
+  requestData?: any;
+  time?: number;
+  Status?: number;
+  response?: any;
+  elapsedTime?: number;
+}
+
+// 错误处理结果接口
+interface ErrorResult {
+  url: string;
+  time: number;
+  status: STATUS_CODE;
+  elapsedTime: number;
+  message: string;
+  requestData: {
+    httpType: string;
+    method: string;
+    data: any;
+  };
+  response: {
+    Status: number;
+    data: any;
+  };
+}
+
 export class RequestPlugin {
   name = PLUGIN_TYPE.REQUEST_PLUGIN;
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
+
   constructor(params: IPluginParams) {
     const { options, breadcrumb, reportData } = params;
     this.options = options;
@@ -30,16 +63,176 @@ export class RequestPlugin {
     this.reportData = reportData;
     this.setup();
   }
+
   setup() {
     this.xhrReplace();
     this.fetchReplace();
   }
+
+  /**
+   * 检查URL是否应该被过滤
+   */
+  private shouldFilterUrl(method: string, url: string): boolean {
+    return (
+      (method === EMethods.Post && this.reportData?.isSdkTransportUrl?.(url)) ||
+      this.reportData?.isFilterHttpUrl?.(url)
+    );
+  }
+
+  /**
+   * 检查是否为错误状态
+   */
+  private isErrorStatus(status: number): boolean {
+    return (
+      status === 0 ||
+      status === HTTP_CODE.BAD_REQUEST ||
+      status > HTTP_CODE.UNAUTHORIZED
+    );
+  }
+
+  /**
+   * 安全地解析JSON
+   */
+  private safeJsonParse(data: any): any {
+    if (!data) return null;
+    try {
+      return typeof data === "string" ? JSON.parse(data) : data;
+    } catch (error) {
+      return data;
+    }
+  }
+
+  /**
+   * 处理响应数据
+   */
+  private processResponse(record: RequestRecord, response: any, responseType: string): void {
+    if (["", "json", "text"].indexOf(responseType) !== -1) {
+      if (this.options?.handleHttpStatus?.call(this, record)) {
+        record.response = this.safeJsonParse(response);
+      }
+    }
+  }
+
+  /**
+   * 统一处理请求数据
+   */
+  private handleRequestData(record: RequestRecord, type: EVENT_TYPE): void {
+    const { url, Status = 200 } = record;
+    
+    if (!url) return;
+
+    const isError = this.isErrorStatus(Status);
+    const result = this.transformRequestData(record);
+
+    // 添加到面包屑（排除上报接口）
+    if (!url.includes(this.options.dsn)) {
+      const category = this.breadcrumb.getCategory(type);
+      this.breadcrumb.push({
+        type,
+        category,
+        data: { ...result },
+        time: record.time!,
+        status: STATUS_CODE.OK,
+      });
+    }
+
+    // 如果是错误，上报错误信息
+    if (isError) {
+      this.reportError(record, type, result);
+    }
+  }
+
+  /**
+   * 上报错误信息
+   */
+  private reportError(record: RequestRecord, type: EVENT_TYPE, result: ErrorResult): void {
+    this.breadcrumb.push({
+      type,
+      category: this.breadcrumb.getCategory(type),
+      data: { ...result },
+      time: record.time!,
+      status: STATUS_CODE.ERROR,
+    });
+
+    this.reportData.send({
+      type,
+      category: this.breadcrumb.getCategory(type),
+      data: { ...result },
+      time: record.time!,
+      name: "httpError",
+      status: STATUS_CODE.ERROR,
+    });
+  }
+
+  /**
+   * 转换请求数据为标准格式
+   */
+  private transformRequestData(data: RequestRecord): ErrorResult {
+    const {
+      elapsedTime = 0,
+      time = 0,
+      method = "",
+      type,
+      Status = 200,
+      response,
+      requestData,
+      url,
+    } = data;
+
+    let status: STATUS_CODE;
+    let message: string;
+
+    if (Status === 0) {
+      status = STATUS_CODE.ERROR;
+      const timeout = (this.options.overTime || 5) * 1000;
+      message = elapsedTime <= timeout
+        ? `请求失败，Status值为:${Status}`
+        : "请求失败，接口超时";
+    } else if (Status < HTTP_CODE.BAD_REQUEST) {
+      status = STATUS_CODE.OK;
+      
+      if (this.options.handleHttpStatus && typeof this.options.handleHttpStatus === "function") {
+        if (this.options.handleHttpStatus(data)) {
+          status = STATUS_CODE.OK;
+        } else {
+          status = STATUS_CODE.ERROR;
+          message = `接口报错，报错信息为：${
+            typeof response === "object" ? JSON.stringify(response) : response
+          }`;
+        }
+      }
+    } else {
+      status = STATUS_CODE.ERROR;
+      message = `请求失败，Status值为:${Status}，${fromHttpStatus(Status)}`;
+    }
+
+    return {
+      url,
+      time,
+      status,
+      elapsedTime,
+      message: `${url}; ${message || ""}`,
+      requestData: {
+        httpType: type as string,
+        method,
+        data: requestData || "",
+      },
+      response: {
+        Status,
+        data: status === STATUS_CODE.ERROR ? response : null,
+      },
+    };
+  }
+
   xhrReplace(): void {
     const _this = this;
     if (!("XMLHttpRequest" in _global)) {
       return;
     }
+
     const originalXhrProto = XMLHttpRequest.prototype;
+
+    // 重写open方法
     replaceAop(originalXhrProto, "open", (originalOpen: voidFun) => {
       return function (this: any, ...args: any[]): void {
         this.record_xhr = {
@@ -51,203 +244,114 @@ export class RequestPlugin {
         originalOpen.apply(this, args);
       };
     });
+
+    // 重写send方法
     replaceAop(originalXhrProto, "send", (originalSend: voidFun) => {
-      return function (this: any, ...args: any): void {
+      return function (this: any, ...args: any[]): void {
         const { method, url } = this.record_xhr;
+        
         // 监听loadend事件，接口成功或失败都会执行
         addEventListenerTo(this, "loadend", function (this: any) {
-          if (
-            (method === EMethods.Post &&
-              _this.reportData?.isSdkTransportUrl?.(url)) ||
-            _this.reportData?.isFilterHttpUrl?.(url)
-          )
-            return;
           const { responseType, response, status } = this;
+          
+          // 检查是否需要过滤
+          if (_this.shouldFilterUrl(method, url)) return;
+
+          // 更新请求记录
           this.record_xhr.requestData = args[0];
-          const eTime = getTimestamp();
-          // 设置该接口的time，用户用户行为按时间排序
           this.record_xhr.time = this.record_xhr.sTime;
           this.record_xhr.Status = status;
-          if (["", "json", "text"].indexOf(responseType) !== -1) {
-            // 用户设置handleHttpStatus函数来判断接口是否正确，只有接口报错时才保留response
-            if (_this.options?.handleHttpStatus?.call(_this, this.record_xhr)) {
-              this.record_xhr.response = response && JSON.parse(response);
-            }
-          }
-          // 接口的执行时长
-          this.record_xhr.elapsedTime = eTime - this.record_xhr.sTime;
-          // 执行之前注册的xhr回调函数
-          _this.handleData(this.record_xhr, EVENT_TYPE.XHR);
+          this.record_xhr.elapsedTime = getTimestamp() - this.record_xhr.sTime;
+
+          // 处理响应数据
+          _this.processResponse(this.record_xhr, response, responseType);
+          
+          // 处理请求数据
+          _this.handleRequestData(this.record_xhr, EVENT_TYPE.XHR);
         });
+
         originalSend.apply(this, args);
       };
     });
   }
 
-  fetchReplace() {
+  fetchReplace(): void {
     const _this = this;
     if (!("fetch" in _global)) {
       return;
     }
+
     replaceAop(_global, EVENT_TYPE.FETCH, (originalFetch: any) => {
-      return function (url: any, config: Partial<Request> = {}): void {
+      return function (url: any, config: Partial<Request> = {}): Promise<Response> {
         const sTime = getTimestamp();
-        const method = (config && config.method) || "GET";
-        let fetchData = {
+        const method = (config?.method || "GET").toUpperCase();
+        
+        // 检查是否需要过滤
+        if (_this.shouldFilterUrl(method, url)) {
+          return originalFetch.apply(_global, [url, config]);
+        }
+
+        let fetchData: RequestRecord = {
           type: HTTP_TYPE.FETCH,
           method,
-          requestData: config && config.body,
+          requestData: config?.body,
           url,
           response: "",
+          sTime,
         };
-        // 获取配置的headers
+
+        // 处理请求头
         const headers = new Headers(config.headers || {});
         Object.assign(headers, {
           setRequestHeader: headers.set,
         });
         _this.options?.beforeAppAjaxSend?.({ method, url }, headers);
 
-        config = Object.assign({}, config, headers);
-        return originalFetch.apply(_global, [url, config]).then(
-          (res: any) => {
-            // 克隆一份，防止被标记已消费
+        const updatedConfig = Object.assign({}, config, headers);
+
+        return originalFetch.apply(_global, [url, updatedConfig])
+          .then((res: Response) => {
+            // 克隆响应，防止被标记已消费
             const tempRes = res.clone();
             const eTime = getTimestamp();
-            fetchData = Object.assign({}, fetchData, {
+            
+            fetchData = {
+              ...fetchData,
               elapsedTime: eTime - sTime,
               Status: tempRes.status,
               time: sTime,
+            };
+
+            return tempRes.text().then((data: string) => {
+              // 处理响应数据
+              _this.processResponse(fetchData, data, "text");
+              _this.handleRequestData(fetchData, EVENT_TYPE.FETCH);
+              return res;
             });
-            tempRes.text().then((data: any) => {
-              // 同理，进接口进行过滤
-              if (
-                (method === EMethods.Post &&
-                  _this?.reportData?.isSdkTransportUrl(url)) ||
-                _this?.reportData?.isFilterHttpUrl(url)
-              )
-                return;
-              // 用户设置handleHttpStatus函数来判断接口是否正确，只有接口报错时才保留response
-              if (_this.options?.handleHttpStatus?.(fetchData)) {
-                fetchData.response = data;
-              }
-              _this.handleData(data, EVENT_TYPE.FETCH);
-            });
-            return res;
-          },
-          // 接口报错
-          (err: any) => {
+          })
+          .catch((err: any) => {
             const eTime = getTimestamp();
-            if (
-              (method === EMethods.Post &&
-                _this.reportData?.isSdkTransportUrl(url)) ||
-              _this.reportData?.isFilterHttpUrl(url)
-            )
-              return;
-            fetchData = Object.assign({}, fetchData, {
+            
+            fetchData = {
+              ...fetchData,
               elapsedTime: eTime - sTime,
-              status: 0,
+              Status: 0,
               time: sTime,
-            });
-            _this.handleData(fetchData, EVENT_TYPE.FETCH);
+            };
+
+            _this.handleRequestData(fetchData, EVENT_TYPE.FETCH);
             throw err;
-          }
-        );
+          });
       };
     });
   }
+
+  // 为了保持向后兼容，保留原有的方法名
   handleData(xhrData: any, type: EVENT_TYPE) {
-    const { url, Status } = xhrData;
-    const isError =
-      Status === 0 ||
-      Status === HTTP_CODE.BAD_REQUEST ||
-      Status > HTTP_CODE.UNAUTHORIZED;
-    const result = this.handleTransForm(xhrData);
-    if (!url) {
-      return;
-    }
-    if (!url.includes(this.options.dsn)) {
-      const category = this.breadcrumb.getCategory(type);
-      this.breadcrumb.push({
-        type: type,
-        category,
-        data: { ...result },
-        time: xhrData.time,
-        status: STATUS_CODE.OK,
-      });
-    }
-    if (isError) {
-      this.breadcrumb.push({
-        type,
-        category: this.breadcrumb.getCategory(type),
-        data: { ...result },
-        time: xhrData.time,
-        status: STATUS_CODE.ERROR,
-      });
-      this.reportData.send({
-        type,
-        category: this.breadcrumb.getCategory(type),
-        data: { ...result },
-        time: xhrData.time,
-        name: "httpError",
-        status: STATUS_CODE.ERROR,
-      });
-    }
+    this.handleRequestData(xhrData, type);
   }
+
   handleTransForm(data: HttpData) {
-    let message: any = "";
-    const {
-      elapsedTime,
-      time,
-      method = "",
-      type,
-      Status = 200,
-      response,
-      requestData,
-    } = data;
-    let status: STATUS_CODE;
-    if (Status === 0) {
-      status = STATUS_CODE.ERROR;
-      message =
-        elapsedTime <= (this.options.overTime || 5) * 1000
-          ? `请求失败，Status值为:${Status}`
-          : "请求失败，接口超时";
-    } else if ((Status as number) < HTTP_CODE.BAD_REQUEST) {
-      status = STATUS_CODE.OK;
-      if (
-        this.options.handleHttpStatus &&
-        typeof this.options.handleHttpStatus == "function"
-      ) {
-        if (this.options.handleHttpStatus(data)) {
-          status = STATUS_CODE.OK;
-        } else {
-          status = STATUS_CODE.ERROR;
-          message = `接口报错，报错信息为：${
-            typeof response == "object" ? JSON.stringify(response) : response
-          }`;
-        }
-      }
-    } else {
-      status = STATUS_CODE.ERROR;
-      message = `请求失败，Status值为:${Status}，${fromHttpStatus(
-        Status as number
-      )}`;
-    }
-    message = `${data.url}; ${message}`;
-    return {
-      url: data.url,
-      time,
-      status,
-      elapsedTime,
-      message,
-      requestData: {
-        httpType: type as string,
-        method,
-        data: requestData || "",
-      },
-      response: {
-        Status,
-        data: status == STATUS_CODE.ERROR ? response : null,
-      },
-    };
+    return this.transformRequestData(data as RequestRecord);
   }
 }
