@@ -143,8 +143,9 @@ export class RequestPlugin {
               _this.reportData?.isFilterHttpUrl(url)
             )
               return;
+            const elapsedTime = eTime - sTime;
             fetchData = Object.assign({}, fetchData, {
-              elapsedTime: eTime - sTime,
+              elapsedTime,
               status: 0,
               time: sTime,
             });
@@ -156,7 +157,7 @@ export class RequestPlugin {
     });
   }
   handleData(xhrData: any, type: EVENT_TYPE) {
-    const { url, Status } = xhrData;
+    const { url, Status, elapsedTime } = xhrData;
     const isError =
       Status === 0 ||
       Status === HTTP_CODE.BAD_REQUEST ||
@@ -176,6 +177,9 @@ export class RequestPlugin {
       });
     }
     if (isError) {
+      // 如果是Status=0且耗时小于200ms，可能是页面跳转导致的请求中断，不上报错误
+      const isLikelyPageNavigation = Status === 0 && elapsedTime < 200;
+
       this.breadcrumb.push({
         type,
         category: this.breadcrumb.getCategory(type),
@@ -183,14 +187,18 @@ export class RequestPlugin {
         time: xhrData.time,
         status: STATUS_CODE.ERROR,
       });
-      this.reportData.send({
-        type,
-        category: this.breadcrumb.getCategory(type),
-        data: { ...result },
-        time: xhrData.time,
-        name: "httpError",
-        status: STATUS_CODE.ERROR,
-      });
+
+      // 只有不是页面跳转导致的错误才上报
+      if (!isLikelyPageNavigation) {
+        this.reportData.send({
+          type,
+          category: this.breadcrumb.getCategory(type),
+          data: { ...result },
+          time: xhrData.time,
+          name: "httpError",
+          status: STATUS_CODE.ERROR,
+        });
+      }
     }
   }
   handleTransForm(data: HttpData) {
