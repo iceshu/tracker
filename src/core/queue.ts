@@ -46,12 +46,19 @@ export class Queue {
   }
 
   flushStack(): void {
-    const temp = this.stack.slice(0);
+    if (this.stack.length === 0) return;
+
+    const temp = this.stack;
     this.stack = [];
     this.isFlushing = false;
-    for (let i = 0; i < temp.length; i++) {
-      temp[i]();
+
+    // 使用 for...of 更高效
+    for (const fn of temp) {
+      try {
+        fn();
+      } catch (error) {
+        console.error("Queue execution error:", error);
+      }
     }
   }
 }
-

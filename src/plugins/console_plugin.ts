@@ -11,7 +11,6 @@ export class ConsolePlugin implements ReplacePlugin {
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
-  isPoxing = false; // 标志位用于标识是否正在代理中
 
   constructor(params: IPluginParams) {
     const { options, breadcrumb, reportData } = params;
@@ -36,20 +35,19 @@ export class ConsolePlugin implements ReplacePlugin {
     });
   }
   replace() {
-    const _this = this;
     if (!("console" in _global)) {
       return;
     }
     const logType = ["log", "debug", "info", "warn", "error", "assert"];
-    logType.forEach(function (level: string): void {
+    logType.forEach((level: string): void => {
       if (!(level in _global.console)) return;
       replaceAop(
         _global.console,
         level,
-        function (originalConsole: () => any): Function {
-          return function (...args: any): void {
+        (originalConsole: () => any): Function => {
+          return (...args: any): void => {
             if (originalConsole) {
-              _this.handleConsole({ args, level });
+              this.handleConsole({ args, level });
               originalConsole.apply(_global.console, args);
             }
           };

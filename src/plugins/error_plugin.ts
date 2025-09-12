@@ -4,6 +4,7 @@ import {
   EVENT_TYPE,
   PLUGIN_TYPE,
   STATUS_CODE,
+  DEFAULTS,
 } from "../core/constant";
 import { _global } from "../core/global";
 import { ReportDataController } from "../core/report";
@@ -29,7 +30,6 @@ export class ErrorPlugin implements ReplacePlugin {
     this.options = options;
     this.breadcrumb = breadcrumb;
     this.reportData = reportData;
-    this.listenError();
     this.setup();
   }
   setup() {
@@ -61,8 +61,22 @@ export class ErrorPlugin implements ReplacePlugin {
     const target = ev.target;
     if (!target || (ev.target && !ev.target.localName)) {
       // vue和react捕获的报错使用ev解析，异步错误使用ev.error解析
-      const stackFrame = ErrorStackParser.parse(!target ? ev : ev.error)[0];
-      const { fileName, columnNumber, lineNumber } = stackFrame;
+      let stackFrame: any;
+      let fileName: string = "unknown";
+      let columnNumber: number = 0;
+      let lineNumber: number = 0;
+
+      try {
+        stackFrame = ErrorStackParser.parse(!target ? ev : ev.error)[0];
+        if (stackFrame) {
+          fileName = stackFrame.fileName || "unknown";
+          columnNumber = stackFrame.columnNumber || 0;
+          lineNumber = stackFrame.lineNumber || 0;
+        }
+      } catch (parseError) {
+        // 如果解析失败，使用默认值，避免错误循环
+        console.warn("ErrorStackParser failed to parse stack:", parseError);
+      }
       const errorData = {
         type: EVENT_TYPE.ERROR,
         status: STATUS_CODE.ERROR,
@@ -125,8 +139,24 @@ export class ErrorPlugin implements ReplacePlugin {
     return exist;
   }
   handleUnhandledRejection(ev: PromiseRejectionEvent): void {
-    const stackFrame = ErrorStackParser.parse(ev.reason)[0];
-    const { fileName, columnNumber, lineNumber } = stackFrame;
+    let fileName: string = "unknown";
+    let columnNumber: number = 0;
+    let lineNumber: number = 0;
+
+    try {
+      const stackFrame = ErrorStackParser.parse(ev.reason)[0];
+      if (stackFrame) {
+        fileName = stackFrame.fileName || "unknown";
+        columnNumber = stackFrame.columnNumber || 0;
+        lineNumber = stackFrame.lineNumber || 0;
+      }
+    } catch (parseError) {
+      // 如果解析失败，使用默认值，避免错误循环
+      console.warn(
+        "ErrorStackParser failed to parse unhandled rejection stack:",
+        parseError
+      );
+    }
     const message = unknownToString(ev.reason.message || ev.reason.stack);
     const data = {
       type: EVENT_TYPE.UNHANDLEDREJECTION,
@@ -148,6 +178,13 @@ export class ErrorPlugin implements ReplacePlugin {
     const hash: string = getErrorUid(
       `${EVENT_TYPE.UNHANDLEDREJECTION}-${message}-${fileName}-${columnNumber}`
     );
+    if (
+      !this.options.repeatCodeError ||
+      (this.options.repeatCodeError && !this.hashMapExist(hash))
+    ) {
+      this.reportData.send(data as any);
+    }
+
     // 开启repeatCodeError第一次报错才上报
   }
 }
@@ -168,8 +205,9 @@ export function resourceTransform(target: ResourceTarget): ResourceError {
   return {
     time: getTimestamp(),
     message:
-      (interceptStr(target.src as string, 1000) ||
-        interceptStr(target.href as string, 1000)) + "; 资源加载失败",
+      (interceptStr(target.src as string, DEFAULTS.MAX_STRING_LENGTH) ||
+        interceptStr(target.href as string, DEFAULTS.MAX_STRING_LENGTH)) +
+      "; 资源加载失败",
     name: target.localName as string,
   };
 }

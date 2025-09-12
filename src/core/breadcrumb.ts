@@ -1,18 +1,19 @@
 import { getTimestamp } from "../utils";
-import { BREADCRUMB_TYPE, EVENT_TYPE } from "./constant";
+import { BREADCRUMB_TYPE, EVENT_TYPE, DEFAULTS } from "./constant";
 import { BreadcrumbData } from "./typing";
 
 export class Breadcrumb {
-  maxBreadcrumbs = 20; // 用户行为存放的最大长度
+  maxBreadcrumbs: number; // 用户行为存放的最大长度
   beforePushBreadcrumb: unknown = null;
   stack: BreadcrumbData[];
   constructor(
-    private maxStackSize: number = 20,
+    maxStackSize: number = DEFAULTS.MAX_BREADCRUMBS,
     private beforePushCallback:
       | ((data: BreadcrumbData) => BreadcrumbData)
       | null = null
   ) {
     this.stack = [];
+    this.maxBreadcrumbs = maxStackSize;
   }
   /**
    * Pushes a breadcrumb to the breadcrumb stack.
@@ -24,13 +25,26 @@ export class Breadcrumb {
     }
   }
   immediatePush(data: BreadcrumbData): void {
-    data.time || (data.time = getTimestamp());
+    data.time ??= getTimestamp();
     if (this.stack.length >= this.maxBreadcrumbs) {
       this.shift();
     }
-    this.stack.push(data);
+    const insertIndex = this.findInsertIndex(data.time);
+    this.stack.splice(insertIndex, 0, data);
+  }
+  private findInsertIndex(time: number): number {
+    let left = 0;
+    let right = this.stack.length;
 
-    this.stack.sort((a, b) => a.time! - b.time!);
+    while (left < right) {
+      const mid = Math.floor((left + right) / 2);
+      if (this.stack[mid].time! <= time) {
+        left = mid + 1;
+      } else {
+        right = mid;
+      }
+    }
+    return left;
   }
   shift(): boolean {
     return this.stack.shift() !== undefined;

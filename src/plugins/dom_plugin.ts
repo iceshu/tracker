@@ -4,6 +4,7 @@ import {
   EVENT_TYPE,
   PLUGIN_TYPE,
   STATUS_CODE,
+  DEFAULTS,
 } from "../core/constant";
 import { Global, _global } from "../core/global";
 import { ReportDataController } from "../core/report";
@@ -39,7 +40,7 @@ export class DomPlugin implements ReplacePlugin {
       osVersion: uaResult.os.version,
       os: uaResult.os.name,
       ua: uaResult.ua,
-      device: uaResult.device.model ? uaResult.device.model : "Unknow",
+      device: uaResult.device.model ? uaResult.device.model : "Unknown",
       device_type: uaResult.device.type ? uaResult.device.type : "Pc",
     };
     Global.deviceInfo = deviceInfo;
@@ -99,7 +100,10 @@ export class DomPlugin implements ReplacePlugin {
       tagName: element.tagName.toLowerCase(),
       id: element.id || undefined,
       className: element.className || undefined,
-      textContent: element.textContent?.trim().slice(0, 50) || undefined,
+      textContent:
+        element.textContent
+          ?.trim()
+          .slice(0, DEFAULTS.MAX_TEXT_CONTENT_LENGTH) || undefined,
       href: element instanceof HTMLAnchorElement ? element.href : undefined,
       type: element.getAttribute("type") || undefined,
       name: element.getAttribute("name") || undefined,
@@ -147,7 +151,7 @@ export class DomPlugin implements ReplacePlugin {
 
     const throttledHandler = throttle(
       this.handleClick,
-      this.options.throttleDelayTime || 0
+      this.options.throttleDelayTime || DEFAULTS.THROTTLE_DELAY
     );
 
     // 使用 useCapture 为 true 确保在事件冒泡之前捕获事件，可以捕获所有元素的点击，包括动态添加的元素

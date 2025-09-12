@@ -1,7 +1,16 @@
-
 export const SDK = {
   VERSION: "0.0.1",
-}
+};
+
+/**
+ * 默认配置常量
+ */
+export const DEFAULTS = {
+  MAX_BREADCRUMBS: 20,
+  THROTTLE_DELAY: 0,
+  MAX_STRING_LENGTH: 1000,
+  MAX_TEXT_CONTENT_LENGTH: 50,
+} as const;
 
 /**
  * 事件类型

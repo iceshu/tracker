@@ -2,7 +2,7 @@ import { BasePlugin } from "../typings/base";
 import { IOptionsParams } from "../typings/options";
 import { getTimestamp, readonly } from "../utils";
 import { Breadcrumb } from "./breadcrumb";
-import { EVENT_TYPE, PLUGIN_TYPE, STATUS_CODE } from "./constant";
+import { EVENT_TYPE, PLUGIN_TYPE, STATUS_CODE, DEFAULTS } from "./constant";
 import { Global } from "./global";
 import { ReportDataController } from "./report";
 
@@ -11,11 +11,12 @@ export class BaseBrowserClient {
   #options: IOptionsParams;
   #reportData: ReportDataController;
   #registeredPlugins: Map<string, BasePlugin>;
-  #baseDeviceInfo = {}
+  #baseDeviceInfo = {};
   constructor(options: IOptionsParams, plugins: BasePlugin[]) {
     this.#options = readonly(options);
     this.#registeredPlugins = new Map();
-    const { maxBreadcrumbs = 20, beforePushBreadcrumb } = options;
+    const { maxBreadcrumbs = DEFAULTS.MAX_BREADCRUMBS, beforePushBreadcrumb } =
+      options;
     this.#breadcrumb = new Breadcrumb(maxBreadcrumbs, beforePushBreadcrumb);
     this.#reportData = new ReportDataController({
       options,
@@ -36,8 +37,7 @@ export class BaseBrowserClient {
       baseDeviceInfo: this.#baseDeviceInfo,
       setBaseDeviceInfo: (deviceInfo: any) => {
         this.#baseDeviceInfo = deviceInfo;
-
-      }
+      },
     };
     Global.plugins = plugins.map((Plugin: any) => {
       const plugin = new Plugin(PluginPrams);

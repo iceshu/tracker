@@ -75,7 +75,7 @@ export class ReportDataController {
   getAuthInfo() {
     return {
       userId: this.userId || this.getAuthId() || "",
-      sdkVersion: "1.1.4",
+      sdkVersion: "1.1.9",
       apikey: this.apikey,
     };
   }
