@@ -155,6 +155,6 @@ export class DomPlugin implements ReplacePlugin {
     );
 
     // 使用 useCapture 为 true 确保在事件冒泡之前捕获事件，可以捕获所有元素的点击，包括动态添加的元素
-    document.addEventListener("click", throttledHandler, true);
+    _global.document.addEventListener("click", throttledHandler, true);
   }
 }

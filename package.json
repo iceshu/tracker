@@ -12,7 +12,10 @@
   "umd": "dist/track.umd.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "test": "vitest ",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest --watch",
     "build": "cross-env NODE_ENV=production rollup -c rollup.config.mjs",
     "dev:watch": "npm run dev && yalc push --watch",
     "watch:yalc": "yalc push --watch",

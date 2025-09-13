@@ -25,7 +25,7 @@ export class ReportDataController {
     this.breadcrumb = breadcrumb;
     this.uuid = generateUUID();
     this.dsn = options.dsn;
-    this.apikey = options?.apikey;
+    this.apikey = options?.apikey || "";
     this.options = options;
     this.getUserId = options?.getUserId;
     this.baseDeviceInfo = baseDeviceInfo;

@@ -19,9 +19,13 @@ export class Breadcrumb {
    * Pushes a breadcrumb to the breadcrumb stack.
    */
   push(data: BreadcrumbData): void {
-    const prepared = this.beforePushCallback?.(data) || data;
-    if (prepared) {
-      this.immediatePush(prepared);
+    if (this.beforePushCallback) {
+      const prepared = this.beforePushCallback(data);
+      if (prepared) {
+        this.immediatePush(prepared);
+      }
+    } else {
+      this.immediatePush(data);
     }
   }
   immediatePush(data: BreadcrumbData): void {

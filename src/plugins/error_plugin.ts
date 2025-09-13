@@ -24,7 +24,7 @@ export class ErrorPlugin implements ReplacePlugin {
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
-  errorMap: WeakMap<any, any> = new WeakMap();
+  errorMap: Map<string, boolean> = new Map();
   constructor(params: IPluginParams) {
     const { options, breadcrumb, reportData } = params;
     this.options = options;

@@ -1,9 +1,8 @@
-/// reference types=”vitest” />
+/// <reference types="vitest" />
 
 import { defineConfig } from "vitest/config";
-// import tsconfigPaths from 'vite-tsconfig-paths';
-
 import path from "path";
+
 export default defineConfig({
   plugins: [],
   resolve: {
@@ -13,5 +12,20 @@ export default defineConfig({
   },
   test: {
     environment: "happy-dom",
+    globals: true,
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "json", "html"],
+      exclude: [
+        "node_modules/",
+        "dist/",
+        "examples/",
+        "**/*.d.ts",
+        "**/*.config.*",
+        "watch.js",
+      ],
+    },
+    include: ["src/**/*.{test,spec}.{js,ts}"],
+    exclude: ["node_modules/", "dist/", "examples/"],
   },
 });
