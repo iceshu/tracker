@@ -166,6 +166,10 @@ export class RequestPlugin {
     if (!url) {
       return;
     }
+    // 确保 url 是字符串类型
+    if (typeof url !== "string") {
+      return;
+    }
     if (!url.includes(this.options.dsn)) {
       const category = this.breadcrumb.getCategory(type);
       this.breadcrumb.push({

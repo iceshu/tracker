@@ -33,6 +33,11 @@ export class ConsolePlugin implements ReplacePlugin {
       status: STATUS_CODE.OK,
       time: getTimestamp(),
     });
+
+    // 如果是 console.error，自动上报数据
+    if (data.level === "error") {
+      this.reportData.send(data);
+    }
   }
   replace() {
     if (!("console" in _global)) {
