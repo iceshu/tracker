@@ -1,5 +1,10 @@
 import { Breadcrumb } from "../core/breadcrumb";
-import { EVENT_TYPE, PLUGIN_TYPE, STATUS_CODE } from "../core/constant";
+import {
+  BREADCRUMB_TYPE,
+  EVENT_TYPE,
+  PLUGIN_TYPE,
+  STATUS_CODE,
+} from "../core/constant";
 import { _global } from "../core/global";
 import { ReportDataController } from "../core/report";
 import { voidFun } from "../core/typing";
@@ -15,6 +20,8 @@ export class HistoryPlugin implements ReplacePlugin {
   private routeStartTime: number = 0; // 路由跳转开始时间
   private routeStartFrom: string = ""; // 跳转来源
   private routeStartTo: string = ""; // 跳转目标
+  private loadCheckTimer: number | null = null; // 定时器ID，用于取消
+  private isRouteCompleted: boolean = false; // 路由是否已完成标记
 
   constructor(params: IPluginParams) {
     const { options, breadcrumb, reportData } = params;
@@ -39,7 +46,9 @@ export class HistoryPlugin implements ReplacePlugin {
         from,
         to,
       });
-      oldOnpopstate && oldOnpopstate.apply(_global, args as any);
+      if (oldOnpopstate) {
+        oldOnpopstate.apply(_global, args as any);
+      }
     };
     // 保存原始的 pushState 和 replaceState 方法
     const originalPushState = window.history.pushState;
@@ -74,29 +83,43 @@ export class HistoryPlugin implements ReplacePlugin {
 
   // 开始路由跳转，记录时间
   startRouteChange(from: string, to: string) {
+    // 取消之前的检测（如果存在）
+    this.cancelRouteCheck();
+
     this.routeStartTime = getTimestamp();
     this.routeStartFrom = from;
     this.routeStartTo = to;
+    this.isRouteCompleted = false;
 
-    // 检测页面渲染完成
-    this.checkRouteComplete();
+    // 开始检测页面加载性能
+    this.checkRouteLoadTime();
+
+    // 监听页面渲染完成
+    this.listenRouteComplete();
   }
 
-  // 检测路由跳转是否完成
-  checkRouteComplete() {
+  // 取消之前的路由检测
+  cancelRouteCheck() {
+    if (this.loadCheckTimer !== null) {
+      clearTimeout(this.loadCheckTimer);
+      this.loadCheckTimer = null;
+    }
+  }
+
+  // 检测路由加载耗时
+  checkRouteLoadTime() {
     const threshold = this.options.overTime || 3000; // 默认3秒阈值
 
-    // 使用 requestIdleCallback 检测页面空闲（渲染完成）
-    const checkComplete = () => {
-      const loadTime = getTimestamp() - this.routeStartTime;
-
-      // 如果超过阈值，上报性能问题
-      if (loadTime > threshold) {
+    // 设置定时器，在阈值时间后检查是否完成
+    this.loadCheckTimer = window.setTimeout(() => {
+      // 如果在阈值时间后还未完成，则上报
+      if (!this.isRouteCompleted) {
+        const loadTime = getTimestamp() - this.routeStartTime;
         const { relative: parsedFrom } = parseUrlToObj(this.routeStartFrom);
         const { relative: parsedTo } = parseUrlToObj(this.routeStartTo);
 
         this.reportData.send({
-          name: this.name,
+          name: BREADCRUMB_TYPE.ROUTE,
           type: EVENT_TYPE.HISTORY,
           data: {
             from: parsedFrom ? parsedFrom : "/",
@@ -109,21 +132,28 @@ export class HistoryPlugin implements ReplacePlugin {
           message: `路由跳转耗时过长: ${loadTime}ms，超过阈值 ${threshold}ms`,
         });
       }
-    };
+      this.loadCheckTimer = null;
+    }, threshold);
+  }
 
-    // 优先使用 requestIdleCallback，否则使用 setTimeout
+  // 监听路由渲染完成
+  listenRouteComplete() {
+    // 使用 requestIdleCallback 检测页面空闲（表示渲染基本完成）
     if ("requestIdleCallback" in window) {
-      requestIdleCallback(
-        () => {
-          checkComplete();
-        },
-        { timeout: threshold }
-      );
+      requestIdleCallback(() => {
+        this.markRouteCompleted();
+      });
     } else {
+      // 降级方案：使用 setTimeout 0
       setTimeout(() => {
-        checkComplete();
-      }, threshold);
+        this.markRouteCompleted();
+      }, 0);
     }
+  }
+
+  // 标记路由完成
+  markRouteCompleted() {
+    this.isRouteCompleted = true;
   }
 
   supportHistory() {
