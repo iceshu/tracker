@@ -25,6 +25,7 @@ export class ErrorPlugin implements ReplacePlugin {
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
   errorMap: Map<string, boolean> = new Map();
+
   constructor(params: IPluginParams) {
     const { options, breadcrumb, reportData } = params;
     this.options = options;
@@ -32,9 +33,38 @@ export class ErrorPlugin implements ReplacePlugin {
     this.reportData = reportData;
     this.setup();
   }
+
   setup() {
     this.listenError();
     this.listenUnHandledRejection();
+  }
+
+  /**
+   * 解析错误堆栈信息
+   * @param error 错误对象
+   * @returns 包含文件名、行号、列号的对象
+   */
+  private parseStackTrace(error: Error): {
+    fileName: string;
+    columnNumber: number;
+    lineNumber: number;
+  } {
+    const defaults = { fileName: "unknown", columnNumber: 0, lineNumber: 0 };
+
+    try {
+      const stackFrame = ErrorStackParser.parse(error)[0];
+      if (stackFrame) {
+        return {
+          fileName: stackFrame.fileName || defaults.fileName,
+          columnNumber: stackFrame.columnNumber || defaults.columnNumber,
+          lineNumber: stackFrame.lineNumber || defaults.lineNumber,
+        };
+      }
+    } catch (parseError) {
+      console.warn("ErrorStackParser failed to parse stack:", parseError);
+    }
+
+    return defaults;
   }
   listenError(): void {
     addEventListenerTo(
@@ -61,22 +91,10 @@ export class ErrorPlugin implements ReplacePlugin {
     const target = ev.target;
     if (!target || (ev.target && !ev.target.localName)) {
       // vue和react捕获的报错使用ev解析，异步错误使用ev.error解析
-      let stackFrame: any;
-      let fileName: string = "unknown";
-      let columnNumber: number = 0;
-      let lineNumber: number = 0;
+      const { fileName, columnNumber, lineNumber } = this.parseStackTrace(
+        !target ? (ev as any) : ev.error
+      );
 
-      try {
-        stackFrame = ErrorStackParser.parse(!target ? ev : ev.error)[0];
-        if (stackFrame) {
-          fileName = stackFrame.fileName || "unknown";
-          columnNumber = stackFrame.columnNumber || 0;
-          lineNumber = stackFrame.lineNumber || 0;
-        }
-      } catch (parseError) {
-        // 如果解析失败，使用默认值，避免错误循环
-        console.warn("ErrorStackParser failed to parse stack:", parseError);
-      }
       const errorData = {
         type: EVENT_TYPE.ERROR,
         status: STATUS_CODE.ERROR,
@@ -139,24 +157,10 @@ export class ErrorPlugin implements ReplacePlugin {
     return exist;
   }
   handleUnhandledRejection(ev: PromiseRejectionEvent): void {
-    let fileName: string = "unknown";
-    let columnNumber: number = 0;
-    let lineNumber: number = 0;
+    const { fileName, columnNumber, lineNumber } = this.parseStackTrace(
+      ev.reason
+    );
 
-    try {
-      const stackFrame = ErrorStackParser.parse(ev.reason)[0];
-      if (stackFrame) {
-        fileName = stackFrame.fileName || "unknown";
-        columnNumber = stackFrame.columnNumber || 0;
-        lineNumber = stackFrame.lineNumber || 0;
-      }
-    } catch (parseError) {
-      // 如果解析失败，使用默认值，避免错误循环
-      console.warn(
-        "ErrorStackParser failed to parse unhandled rejection stack:",
-        parseError
-      );
-    }
     const message = unknownToString(ev.reason.message || ev.reason.stack);
     const data = {
       type: EVENT_TYPE.UNHANDLEDREJECTION,

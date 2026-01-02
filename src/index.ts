@@ -7,7 +7,8 @@ import {
   HistoryPlugin,
   PerformancePlugin,
   RequestPlugin,
-  VuePlugin
+  ResourcePlugin,
+  VuePlugin,
 } from "./plugins";
 import { BasePlugin } from "./typings/base";
 import { IOptionsParams } from "./typings/options";
@@ -17,15 +18,18 @@ const pluginMap: Record<string, BasePlugin> = {
   'HistoryPlugin': HistoryPlugin,
   'ErrorPlugin': ErrorPlugin,
   'ConsolePlugin': ConsolePlugin,
-  "PerformancePlugin": PerformancePlugin
-}
+  'PerformancePlugin': PerformancePlugin,
+  'ResourcePlugin': ResourcePlugin,
+};
 
 export const TrackInit = (rawOptions: IOptionsParams) => {
   const supportPlugins = rawOptions.supportPlugins || [];
-  const currentPlugins = supportPlugins.map(e => {
-    const plugin = pluginMap[e]
-    return plugin;
-  }).filter(Boolean);
+  const currentPlugins = supportPlugins
+    .map((e) => {
+      const plugin = pluginMap[e];
+      return plugin;
+    })
+    .filter(Boolean);
   if (rawOptions.vue) {
     currentPlugins.push(VuePlugin);
   }

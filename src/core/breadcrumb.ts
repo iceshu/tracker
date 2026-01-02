@@ -37,6 +37,16 @@ export class Breadcrumb {
     this.stack.splice(insertIndex, 0, data);
   }
   private findInsertIndex(time: number): number {
+    // 小数组时直接遍历更快（避免二分查找的开销）
+    if (this.stack.length < 10) {
+      let i = this.stack.length - 1;
+      while (i >= 0 && this.stack[i].time! > time) {
+        i--;
+      }
+      return i + 1;
+    }
+
+    // 大数组时使用二分查找
     let left = 0;
     let right = this.stack.length;
 

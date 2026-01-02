@@ -351,7 +351,7 @@ describe("ErrorPlugin", () => {
       errorPlugin.handleUnhandledRejection(mockRejectionEvent);
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        "ErrorStackParser failed to parse unhandled rejection stack:",
+        "ErrorStackParser failed to parse stack:",
         expect.any(Error)
       );
 

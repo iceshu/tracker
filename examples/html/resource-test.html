@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>资源加载监控测试</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 50px auto;
+        padding: 20px;
+      }
+      .test-section {
+        margin: 20px 0;
+        padding: 20px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+      }
+      button {
+        padding: 10px 20px;
+        margin: 5px;
+        cursor: pointer;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+      }
+      button:hover {
+        background: #0056b3;
+      }
+      .log {
+        margin-top: 10px;
+        padding: 10px;
+        background: #f5f5f5;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>资源加载监控测试</h1>
+
+    <div class="test-section">
+      <h2>1. 测试资源加载超时</h2>
+      <p>点击按钮加载一个模拟慢速的图片（超过10秒）</p>
+      <button onclick="loadSlowImage()">加载慢速图片</button>
+      <div id="slow-image-container"></div>
+    </div>
+
+    <div class="test-section">
+      <h2>2. 测试资源加载失败</h2>
+      <p>点击按钮加载一个不存在的图片（会触发错误）</p>
+      <button onclick="loadFailedImage()">加载失败图片</button>
+      <div id="failed-image-container"></div>
+    </div>
+
+    <div class="test-section">
+      <h2>3. 测试路由跳转性能</h2>
+      <p>点击按钮模拟慢速路由跳转（超过3秒）</p>
+      <button onclick="simulateSlowRoute()">模拟慢速路由</button>
+      <div id="route-status"></div>
+    </div>
+
+    <div class="test-section">
+      <h2>4. 批量加载资源测试</h2>
+      <p>加载多个资源，测试性能监控</p>
+      <button onclick="loadMultipleResources()">批量加载资源</button>
+      <div id="batch-container"></div>
+    </div>
+
+    <div class="log" id="console-log">控制台日志将显示在这里...</div>
+
+    <script type="module">
+      import { TrackInit } from "../../dist/track.esm.js";
+
+      // 初始化监控
+      const tracker = TrackInit({
+        dsn: "https://hapi.akool.io/monitor/collect",
+        supportPlugins: [
+          "ErrorPlugin", // 监控资源加载失败
+          "ResourcePlugin", // 监控资源加载性能
+          "HistoryPlugin", // 监控路由跳转性能
+        ],
+        overTime: 3000, // 路由跳转超过3秒上报
+        resourceLoadTime: 5000, // 资源加载超过5秒上报（测试用，设置短一点）
+        beforeDataReport: (data) => {
+          // 拦截上报，显示在页面上
+          console.log("准备上报:", data);
+          const logDiv = document.getElementById("console-log");
+          logDiv.innerHTML = `<strong>上报数据:</strong><br>${JSON.stringify(
+            data,
+            null,
+            2
+          )}`;
+          return data;
+        },
+      });
+
+      window.tracker = tracker;
+
+      // 1. 加载慢速图片（使用延迟响应的图片服务）
+      window.loadSlowImage = function () {
+        const container = document.getElementById("slow-image-container");
+        container.innerHTML = "<p>加载中...</p>";
+
+        // 使用 picsum.photos 的延迟功能模拟慢速加载
+        const img = new Image();
+        // 添加时间戳避免缓存，使用较大的图片模拟慢速加载
+        img.src =
+          "https://picsum.photos/600/400?random=" +
+          Date.now();
+        img.alt = "慢速加载的图片";
+        img.style.maxWidth = "100%";
+
+        img.onload = () => {
+          container.innerHTML =
+            '<p style="color: green;">✓ 图片加载完成（但可能已触发超时上报）</p>';
+          container.appendChild(img);
+        };
+        img.onerror = () => {
+          container.innerHTML = '<p style="color: red;">✗ 图片加载失败</p>';
+        };
+      };
+
+      // 2. 加载失败的图片
+      window.loadFailedImage = function () {
+        const container = document.getElementById("failed-image-container");
+        const img = document.createElement("img");
+        img.src =
+          "https://this-url-does-not-exist-404-error.com/image.jpg?" +
+          Date.now();
+        img.alt = "不存在的图片";
+        img.onerror = () => {
+          container.innerHTML =
+            '<p style="color: orange;">✗ 资源加载失败（已触发错误上报）</p>';
+        };
+        container.appendChild(img);
+      };
+
+      // 3. 模拟慢速路由跳转
+      window.simulateSlowRoute = function () {
+        const statusDiv = document.getElementById("route-status");
+        statusDiv.innerHTML = "<p>路由跳转中...</p>";
+
+        // 触发路由变化
+        history.pushState({}, "", "/slow-route?t=" + Date.now());
+
+        // 模拟页面渲染需要很长时间（超过3秒）
+        // 注意：实际项目中，这通常是因为数据加载或复杂渲染
+        setTimeout(() => {
+          statusDiv.innerHTML =
+            '<p style="color: green;">✓ 路由渲染完成（但可能已触发超时上报）</p>';
+        }, 4000);
+      };
+
+      // 4. 批量加载资源
+      window.loadMultipleResources = function () {
+        const container = document.getElementById("batch-container");
+        container.innerHTML = "<p>批量加载资源中...</p>";
+
+        // 加载多个图片
+        for (let i = 0; i < 5; i++) {
+          const img = new Image();
+          img.src = `https://picsum.photos/200/200?random=${Date.now() + i}`;
+          container.appendChild(img);
+        }
+
+        // 加载CSS
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href =
+          "https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css";
+        document.head.appendChild(link);
+
+        setTimeout(() => {
+          container.innerHTML += '<p style="color: green;">✓ 批量加载完成</p>';
+        }, 2000);
+      };
+    </script>
+  </body>
+</html>

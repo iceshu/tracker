@@ -36,7 +36,11 @@ const tt = TrackInit({
     "HistoryPlugin",
     "ErrorPlugin",
     "ConsolePlugin",
+    "ResourcePlugin", // 新增：监控资源加载性能
   ],
   filterXhrUrlRegExp: createFilterRegExp(ignoredPatterns),
+  filterResourceUrlRegExp: createFilterRegExp(ignoredPatterns), // 过滤不需要监控的资源
+  overTime: 3000, // 路由跳转超过3秒上报
+  resourceLoadTime: 10000, // 资源加载超过10秒上报
 });
 window.tt = tt;

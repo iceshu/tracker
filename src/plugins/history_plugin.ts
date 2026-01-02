@@ -96,6 +96,11 @@ export class HistoryPlugin implements ReplacePlugin {
 
     // 监听页面渲染完成
     this.listenRouteComplete();
+
+    // 页面卸载时清理定时器，防止内存泄漏
+    addEventListenerTo(_global, 'beforeunload', () => {
+      this.cancelRouteCheck();
+    }, { once: true } as AddEventListenerOptions);
   }
 
   // 取消之前的路由检测
@@ -154,6 +159,11 @@ export class HistoryPlugin implements ReplacePlugin {
   // 标记路由完成
   markRouteCompleted() {
     this.isRouteCompleted = true;
+  }
+
+  // 销毁插件，清理资源
+  destroy() {
+    this.cancelRouteCheck();
   }
 
   supportHistory() {

@@ -4,6 +4,7 @@ export interface IOptionsParams {
   dsn: string;
   version?: string;
   filterXhrUrlRegExp?: RegExp;
+  filterResourceUrlRegExp?: RegExp;
   skipLocalName?: (e: HTMLElement) => boolean;
   [key: string]: any;
   beforeDataReport?: (T: any) => any;
@@ -13,6 +14,7 @@ export interface IOptionsParams {
   supportPlugins?: string[];
   getUserId?: () => string | number;
   overTime?: number;
+  resourceLoadTime?: number;
   wrapElementCallback?: (element: HTMLElement) => void;
 }
 

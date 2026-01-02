@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { ReportDataController } from "../report";
 import { Breadcrumb } from "../breadcrumb";
-import { EVENT_TYPE } from "../constant";
+import { EVENT_TYPE, SDK } from "../constant";
 import { IOptionsParams } from "../../typings/options";
 import { ISendData, ReportData } from "../typing";
 
@@ -158,7 +158,7 @@ describe("ReportDataController", () => {
           breadcrumb: [],
           userInfo: expect.objectContaining({
             userId: "user-123",
-            sdkVersion: "1.1.9",
+            sdkVersion: SDK.VERSION,
             apikey: "test-api-key",
           }),
           deviceInfo: expect.objectContaining({

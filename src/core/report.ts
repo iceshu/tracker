@@ -1,7 +1,7 @@
 import { Queue } from "./queue";
 import { Global } from "./global";
 import { generateUUID, getLocationHref, isEmpty } from "../utils";
-import { EVENT_TYPE } from "./constant";
+import { EVENT_TYPE, SDK } from "./constant";
 import { Breadcrumb } from "./breadcrumb";
 import { ISendData, ReportData } from "./typing";
 import { IPluginParams } from "../plugins/common";
@@ -75,7 +75,7 @@ export class ReportDataController {
   getAuthInfo() {
     return {
       userId: this.userId || this.getAuthId() || "",
-      sdkVersion: "2.0.0",
+      sdkVersion: SDK.VERSION,
       apikey: this.apikey,
     };
   }
