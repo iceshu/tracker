@@ -1,6 +1,10 @@
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const pkg = require("./package.json");
+
 import typescript from "@rollup/plugin-typescript";
 import json from "@rollup/plugin-json";
-import pkg from "./package.json" assert { type: "json" };
 import resolve from "@rollup/plugin-node-resolve";
 import commonjs from "@rollup/plugin-commonjs";
 import terser from "@rollup/plugin-terser";
