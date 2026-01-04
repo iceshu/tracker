@@ -9,7 +9,12 @@ import { _global } from "../core/global";
 import { ReportDataController } from "../core/report";
 import { voidFun } from "../core/typing";
 import { IOptionsParams } from "../typings/options";
-import { getLocationHref, getTimestamp, parseUrlToObj } from "../utils";
+import {
+  getLocationHref,
+  getTimestamp,
+  parseUrlToObj,
+  addEventListenerTo,
+} from "../utils";
 import { IPluginParams, ReplacePlugin } from "./common";
 
 export class HistoryPlugin implements ReplacePlugin {
@@ -98,9 +103,14 @@ export class HistoryPlugin implements ReplacePlugin {
     this.listenRouteComplete();
 
     // 页面卸载时清理定时器，防止内存泄漏
-    addEventListenerTo(_global, 'beforeunload', () => {
-      this.cancelRouteCheck();
-    }, { once: true } as AddEventListenerOptions);
+    addEventListenerTo(
+      _global,
+      "beforeunload",
+      () => {
+        this.cancelRouteCheck();
+      },
+      { once: true } as AddEventListenerOptions
+    );
   }
 
   // 取消之前的路由检测

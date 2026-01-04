@@ -14,14 +14,14 @@ export const getTimestamp = (): number => Date.now();
  */
 export function generateUUID(): string {
   // 优先使用现代浏览器的 crypto API
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
     return crypto.randomUUID();
   }
 
   // 降级方案：生成 UUID v4
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
 }
@@ -77,10 +77,10 @@ export function isEmpty(value: unknown): boolean {
 
   // 提前返回，避免不必要的类型检查
   const type = typeof value;
-  if (type === 'string') return value.trim() === '';
-  if (type === 'object') {
+  if (type === "string") return (value as string).trim() === "";
+  if (type === "object") {
     if (Array.isArray(value)) return value.length === 0;
-    return Object.keys(value).length === 0;
+    return Object.keys(value as object).length === 0;
   }
 
   return false;
