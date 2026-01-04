@@ -99,7 +99,7 @@ export class ReportDataController {
       ...data,
       userInfo: this.getAuthInfo(), // 获取用户信息
       uuid: this.uuid,
-      releaseVersion: this.options?.version,
+      appVersion: this.options?.appVersion, // 引用方应用版本号
       pageUrl: getLocationHref(),
       deviceInfo: Global.deviceInfo,
       sessionID: SessionManager.getSessionId(),

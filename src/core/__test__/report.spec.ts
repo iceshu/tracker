@@ -57,7 +57,7 @@ describe("ReportDataController", () => {
     mockOptions = {
       dsn: "https://api.example.com/report",
       apikey: "test-api-key",
-      version: "1.0.0",
+      appVersion: "1.0.0",
       getUserId: vi.fn().mockReturnValue("user-123"),
       beforeDataReport: vi.fn().mockImplementation((data) => data),
     } as IOptionsParams;
@@ -152,7 +152,7 @@ describe("ReportDataController", () => {
           type: EVENT_TYPE.ERROR,
           message: "Test error",
           uuid: "test-uuid-123",
-          releaseVersion: "1.0.0",
+          appVersion: "1.0.0",
           pageUrl: "https://example.com/page",
           sessionID: "session-456",
           breadcrumb: [],

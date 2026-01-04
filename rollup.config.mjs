@@ -8,10 +8,17 @@ import json from "@rollup/plugin-json";
 import resolve from "@rollup/plugin-node-resolve";
 import commonjs from "@rollup/plugin-commonjs";
 import terser from "@rollup/plugin-terser";
+import replace from "@rollup/plugin-replace";
 const name = "__TC_TRACKER__";
 const isProduction = process.env.NODE_ENV === "production";
 
 const plugins = [
+  replace({
+    preventAssignment: true,
+    values: {
+      __PKG_VERSION__: pkg.version,
+    },
+  }),
   typescript({ outDir: "dist", declaration: true, declarationDir: "dist" }),
   json(),
   resolve(),

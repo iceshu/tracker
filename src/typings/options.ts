@@ -2,7 +2,7 @@ import { IAnyObject } from "./common";
 
 export interface IOptionsParams {
   dsn: string;
-  version?: string;
+  appVersion?: string; // 引用方应用的版本号，用于区分不同版本的问题
   filterXhrUrlRegExp?: RegExp;
   filterResourceUrlRegExp?: RegExp;
   skipLocalName?: (e: HTMLElement) => boolean;

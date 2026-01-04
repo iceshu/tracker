@@ -1,5 +1,5 @@
 export const SDK = {
-  VERSION: "0.0.1",
+  VERSION: "__PKG_VERSION__",
 };
 
 /**

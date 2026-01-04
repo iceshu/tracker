@@ -1,6 +1,6 @@
 {
   "name": "tc-tracker",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "monitor web performance",
   "keywords": [
     "performance",
@@ -34,6 +34,7 @@
     "@rollup/plugin-commonjs": "^28.0.3",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.0",
+    "@rollup/plugin-replace": "^6.0.3",
     "@rollup/plugin-typescript": "^11.1.6",
     "@types/ua-parser-js": "^0.7.39",
     "error-stack-parser": "^2.1.4",

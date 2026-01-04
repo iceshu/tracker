@@ -30,6 +30,7 @@ export const createFilterRegExp = (patterns) => {
 
 const tt = TrackInit({
   dsn: "https://hapi.akool.io/monitor/collect",
+  appVersion: "1.0.0", // 你的应用版本号，用于区分不同版本的问题
   supportPlugins: [
     "RequestPlugin",
     "DomPlugin",
