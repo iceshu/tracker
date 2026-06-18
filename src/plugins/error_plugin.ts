@@ -25,6 +25,9 @@ export class ErrorPlugin implements ReplacePlugin {
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
   errorMap: Map<string, boolean> = new Map();
+  private errorHandler = (e: any) => this.handleError(e);
+  private rejectionHandler = (e: any) => this.handleUnhandledRejection(e);
+  private isSetup = false;
 
   constructor(params: IPluginParams) {
     const { options, breadcrumb, reportData } = params;
@@ -35,6 +38,8 @@ export class ErrorPlugin implements ReplacePlugin {
   }
 
   setup() {
+    if (this.isSetup) return;
+    this.isSetup = true;
     this.listenError();
     this.listenUnHandledRejection();
   }
@@ -67,22 +72,13 @@ export class ErrorPlugin implements ReplacePlugin {
     return defaults;
   }
   listenError(): void {
-    addEventListenerTo(
-      _global,
-      EVENT_TYPE.ERROR,
-      (e: any) => {
-        this.handleError(e);
-      },
-      true
-    );
+    addEventListenerTo(_global, EVENT_TYPE.ERROR, this.errorHandler, true);
   }
   listenUnHandledRejection() {
     addEventListenerTo(
       _global,
       EVENT_TYPE.UNHANDLEDREJECTION,
-      (e: any) => {
-        this.handleUnhandledRejection(e);
-      },
+      this.rejectionHandler,
       true
     );
   }
@@ -90,6 +86,10 @@ export class ErrorPlugin implements ReplacePlugin {
   handleError(ev: ErrorTarget): any {
     const target = ev.target;
     if (!target || (ev.target && !ev.target.localName)) {
+      // 过滤跨域脚本错误（Script error.），这类错误无堆栈信息，上报无意义
+      if (ev.message === "Script error.") {
+        return;
+      }
       // vue和react捕获的报错使用ev解析，异步错误使用ev.error解析
       const { fileName, columnNumber, lineNumber } = this.parseStackTrace(
         !target ? (ev as any) : ev.error
@@ -157,11 +157,15 @@ export class ErrorPlugin implements ReplacePlugin {
     return exist;
   }
   handleUnhandledRejection(ev: PromiseRejectionEvent): void {
-    const { fileName, columnNumber, lineNumber } = this.parseStackTrace(
-      ev.reason
-    );
+    const reason = ev.reason;
+    const { fileName, columnNumber, lineNumber } = this.parseStackTrace(reason);
 
-    const message = unknownToString(ev.reason.message || ev.reason.stack);
+    const message = unknownToString(reason?.message || reason?.stack || reason);
+
+    // 过滤跨域脚本错误（Script error.）
+    if (message === "Script error.") {
+      return;
+    }
     const data = {
       type: EVENT_TYPE.UNHANDLEDREJECTION,
       status: STATUS_CODE.ERROR,
@@ -190,6 +194,60 @@ export class ErrorPlugin implements ReplacePlugin {
     }
 
     // 开启repeatCodeError第一次报错才上报
+  }
+
+  /**
+   * React/Next 错误边界专用上报：携带组件栈与 digest，
+   * 供 error.tsx / global-error.tsx 手动调用（这类渲染错误不会冒泡到 window error）
+   */
+  handleReactError(
+    error: Error,
+    errorInfo?: { componentStack?: string; digest?: string }
+  ): void {
+    if (!error) return;
+    const { fileName, columnNumber, lineNumber } = this.parseStackTrace(error);
+    const errorData = {
+      type: EVENT_TYPE.ERROR,
+      status: STATUS_CODE.ERROR,
+      name: "react",
+      time: getTimestamp(),
+      data: {
+        message: error.message,
+        fileName,
+        line: lineNumber,
+        column: columnNumber,
+        stack: error.stack,
+        componentStack: errorInfo?.componentStack,
+        digest: errorInfo?.digest,
+      },
+    };
+    this.breadcrumb.push({
+      type: EVENT_TYPE.ERROR,
+      category: this.breadcrumb.getCategory(EVENT_TYPE.ERROR),
+      data: errorData,
+      time: getTimestamp(),
+      status: STATUS_CODE.ERROR,
+    });
+    const hash: string = getErrorUid(
+      `${EVENT_TYPE.ERROR}-react-${error.message}-${fileName}-${columnNumber}`
+    );
+    if (
+      !this.options.repeatCodeError ||
+      (this.options.repeatCodeError && !this.hashMapExist(hash))
+    ) {
+      this.reportData.send(errorData as any);
+    }
+  }
+
+  destroy(): void {
+    _global.removeEventListener(EVENT_TYPE.ERROR, this.errorHandler, true);
+    _global.removeEventListener(
+      EVENT_TYPE.UNHANDLEDREJECTION,
+      this.rejectionHandler,
+      true
+    );
+    this.errorMap.clear();
+    this.isSetup = false;
   }
 }
 

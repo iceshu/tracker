@@ -1,4 +1,5 @@
 import { BaseBrowserClient } from "./core";
+import { Global } from "./core/global";
 import { VueInstance } from "./core/options";
 import {
   ConsolePlugin,
@@ -41,10 +42,22 @@ export function install(Vue: VueInstance, rawOptions: IOptionsParams) {
   // vue项目在Vue.config.errorHandler中上报错误
   const baseClient = TrackInit(rawOptions);
   Vue.config!.errorHandler = function (err, vm, info) {
-    console.log(err);
     baseClient.errorBoundary(err);
     if (handler) handler.apply(null, [err, vm, info]);
   };
 }
-export default { install, TrackInit };
+
+/**
+ * React/Next 错误上报入口。
+ * 在 error.tsx / global-error.tsx 中调用即可，无需持有 client 实例。
+ * 这类渲染错误被 React 错误边界吞掉、不会冒泡到 window error，必须手动上报。
+ */
+export function reportReactError(
+  error: Error,
+  errorInfo?: { componentStack?: string; digest?: string }
+) {
+  Global.captureReactError(error, errorInfo);
+}
+
+export default { install, TrackInit, reportReactError };
 export * from "./typings/base";

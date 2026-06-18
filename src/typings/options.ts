@@ -16,6 +16,17 @@ export interface IOptionsParams {
   overTime?: number;
   resourceLoadTime?: number;
   wrapElementCallback?: (element: HTMLElement) => void;
+  // 请求错误过滤配置（降噪）
+  ignoreErrors?: {
+    // 忽略超时错误的 URL 模式列表（如非关键接口：公告、广告等）
+    timeoutUrls?: string[];
+    // 自定义错误过滤函数，返回 true 表示忽略该错误
+    customFilter?: (data: {
+      url: string;
+      status: number;
+      elapsedTime: number;
+    }) => boolean;
+  };
 }
 
 export interface VueInstance {

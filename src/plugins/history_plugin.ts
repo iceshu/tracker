@@ -27,6 +27,10 @@ export class HistoryPlugin implements ReplacePlugin {
   private routeStartTo: string = ""; // 跳转目标
   private loadCheckTimer: number | null = null; // 定时器ID，用于取消
   private isRouteCompleted: boolean = false; // 路由是否已完成标记
+  private oldOnpopstate: any = null; // 原始 onpopstate，destroy 时还原
+  private originalPushState: History["pushState"] | null = null;
+  private originalReplaceState: History["replaceState"] | null = null;
+  private isSetup = false;
 
   constructor(params: IPluginParams) {
     const { options, breadcrumb, reportData } = params;
@@ -36,11 +40,14 @@ export class HistoryPlugin implements ReplacePlugin {
     this.setup();
   }
   setup() {
+    if (this.isSetup) return;
     if (!supportsHistory()) {
       return;
     }
+    this.isSetup = true;
     const history = _global.history;
     const oldOnpopstate = _global.onpopstate;
+    this.oldOnpopstate = oldOnpopstate;
     _global.onpopstate = (...args: any[]) => {
       const to = getLocationHref();
       const from = lastHref;
@@ -58,6 +65,8 @@ export class HistoryPlugin implements ReplacePlugin {
     // 保存原始的 pushState 和 replaceState 方法
     const originalPushState = window.history.pushState;
     const originalReplaceState = window.history.replaceState;
+    this.originalPushState = originalPushState;
+    this.originalReplaceState = originalReplaceState;
 
     const createProxy = (originalMethod: voidFun) => {
       return new Proxy(originalMethod, {
@@ -171,9 +180,20 @@ export class HistoryPlugin implements ReplacePlugin {
     this.isRouteCompleted = true;
   }
 
-  // 销毁插件，清理资源
+  // 销毁插件，清理定时器并还原被改写的 history 方法
   destroy() {
     this.cancelRouteCheck();
+    if (this.originalPushState) {
+      _global.history.pushState = this.originalPushState;
+      this.originalPushState = null;
+    }
+    if (this.originalReplaceState) {
+      _global.history.replaceState = this.originalReplaceState;
+      this.originalReplaceState = null;
+    }
+    _global.onpopstate = this.oldOnpopstate;
+    this.oldOnpopstate = null;
+    this.isSetup = false;
   }
 
   supportHistory() {

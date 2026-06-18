@@ -12,6 +12,7 @@ export abstract class BasePlugin {
 
     // 插件生命周期钩子
     setup?(): void;
+    destroy?(): void;
     beforeAddBreadcrumb?(breadcrumb: BreadcrumbItem): BreadcrumbItem | null;
     beforeReport?(data: ReportData): ReportData | null;
     afterReport?(data: ReportData): void;
@@ -20,13 +21,11 @@ export abstract class BasePlugin {
 export abstract class BaseClient {
     #breadcrumb: Breadcrumb;
     #options: IOptionsParams;
-    #plugins: BasePlugin[] = [];
     #reportData: ReportDataController;
     #registeredPlugins: WeakMap<any, any>;
 
     constructor(options: IOptionsParams, plugins: BasePlugin[]) {
         this.#options = options;
-        this.#plugins = plugins;
         this.#registeredPlugins = new Map();
         const { maxBreadcrumbs, beforePushBreadcrumb } = options;
         this.#breadcrumb = new Breadcrumb(maxBreadcrumbs, beforePushBreadcrumb);

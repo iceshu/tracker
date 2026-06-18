@@ -6,6 +6,14 @@ import { EVENT_TYPE, PLUGIN_TYPE, STATUS_CODE, DEFAULTS } from "./constant";
 import { Global } from "./global";
 import { ReportDataController } from "./report";
 
+type ErrorBoundaryPlugin = BasePlugin & {
+  handleError?(err: Error): void;
+  handleReactError?(
+    error: Error,
+    errorInfo?: { componentStack?: string; digest?: string }
+  ): void;
+};
+
 export class BaseBrowserClient {
   #breadcrumb: Breadcrumb;
   #options: IOptionsParams;
@@ -43,10 +51,6 @@ export class BaseBrowserClient {
     Global.plugins = plugins.map((Plugin: any) => {
       const plugin = new Plugin(PluginPrams);
       this.#registeredPlugins.set(plugin.name, plugin);
-      // 调用插件的 setup 方法来初始化插件
-      if (typeof plugin.setup === "function") {
-        plugin.setup();
-      }
       return plugin;
     });
   }
@@ -70,8 +74,33 @@ export class BaseBrowserClient {
   }
 
   errorBoundary(err: Error) {
-    const errorPlugin = this.#registeredPlugins.get(PLUGIN_TYPE.ERROR_PLUGIN);
-    //@ts-ignore
-    errorPlugin?.handleError(err);
+    const errorPlugin = this.#registeredPlugins.get(
+      PLUGIN_TYPE.ERROR_PLUGIN
+    ) as ErrorBoundaryPlugin | undefined;
+    errorPlugin?.handleError?.(err);
+  }
+
+  // React/Next 错误边界专用上报（携带组件栈、digest）
+  captureReactError(
+    error: Error,
+    errorInfo?: { componentStack?: string; digest?: string }
+  ) {
+    const errorPlugin = this.#registeredPlugins.get(
+      PLUGIN_TYPE.ERROR_PLUGIN
+    ) as ErrorBoundaryPlugin | undefined;
+    errorPlugin?.handleReactError?.(error, errorInfo);
+  }
+
+  // 卸载所有插件副作用（监听器、AOP 改写、定时器），供框架卸载时调用
+  destroy() {
+    this.#registeredPlugins.forEach((plugin) => {
+      try {
+        plugin.destroy?.();
+      } catch (e) {
+        console.error("Plugin destroy error:", e);
+      }
+    });
+    this.#registeredPlugins.clear();
+    Global.plugins = [];
   }
 }

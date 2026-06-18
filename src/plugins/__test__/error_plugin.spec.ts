@@ -99,6 +99,7 @@ describe("ErrorPlugin", () => {
         "listenUnHandledRejection"
       );
 
+      errorPlugin.destroy();
       errorPlugin.setup();
 
       expect(listenErrorSpy).toHaveBeenCalled();

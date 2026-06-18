@@ -18,6 +18,7 @@ export class DomPlugin implements ReplacePlugin {
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
+  private clickHandler: ((event: MouseEvent) => void) | null = null;
 
   constructor(params: IPluginParams) {
     const { options, breadcrumb, reportData } = params;
@@ -149,12 +150,19 @@ export class DomPlugin implements ReplacePlugin {
   replace(): void {
     if (!("document" in _global)) return;
 
-    const throttledHandler = throttle(
+    this.clickHandler = throttle(
       this.handleClick,
       this.options.throttleDelayTime || DEFAULTS.THROTTLE_DELAY
     );
 
     // 使用 useCapture 为 true 确保在事件冒泡之前捕获事件，可以捕获所有元素的点击，包括动态添加的元素
-    _global.document.addEventListener("click", throttledHandler, true);
+    _global.document.addEventListener("click", this.clickHandler, true);
+  }
+
+  destroy(): void {
+    if ("document" in _global && this.clickHandler) {
+      _global.document.removeEventListener("click", this.clickHandler, true);
+      this.clickHandler = null;
+    }
   }
 }

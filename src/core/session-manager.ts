@@ -1,7 +1,8 @@
 export class SessionManager {
     private static readonly SESSION_KEY = 'monitor_session_id';
     private static readonly SESSION_EXPIRY_KEY = 'monitor_session_expiry';
-    private static readonly SESSION_TIMEOUT = 30 * 60 * 1000 * Infinity; //不过期
+    // null 表示不过期（sessionStorage 在标签页关闭时本就会清除）；改为毫秒数即启用滑动过期
+    private static readonly SESSION_TIMEOUT: number | null = null;
 
     /**
      * 获取或创建 sessionID
@@ -25,19 +26,22 @@ export class SessionManager {
      */
     private static getExistingSessionId(): string | null {
         const sessionId = sessionStorage.getItem(this.SESSION_KEY);
-        const expiry = sessionStorage.getItem(this.SESSION_EXPIRY_KEY);
-
-        if (!sessionId || !expiry) {
+        if (!sessionId) {
             return null;
         }
+        if (this.SESSION_TIMEOUT == null) {
+            return sessionId;
+        }
 
-        // 检查session是否过期
+        const expiry = sessionStorage.getItem(this.SESSION_EXPIRY_KEY);
+        if (!expiry) {
+            return null;
+        }
         const expiryTime = parseInt(expiry, 10);
-        if (Date.now() > expiryTime) {
+        if (Number.isNaN(expiryTime) || Date.now() > expiryTime) {
             this.clearSession();
             return null;
         }
-
         return sessionId;
     }
 
@@ -68,9 +72,11 @@ export class SessionManager {
      * @param sessionId 
      */
     private static setSession(sessionId: string): void {
-        const expiryTime = Date.now() + this.SESSION_TIMEOUT;
         sessionStorage.setItem(this.SESSION_KEY, sessionId);
-        sessionStorage.setItem(this.SESSION_EXPIRY_KEY, expiryTime.toString());
+        if (this.SESSION_TIMEOUT != null) {
+            const expiryTime = Date.now() + this.SESSION_TIMEOUT;
+            sessionStorage.setItem(this.SESSION_EXPIRY_KEY, expiryTime.toString());
+        }
     }
 
     /**

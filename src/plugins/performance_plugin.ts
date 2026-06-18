@@ -13,6 +13,7 @@ export class PerformancePlugin implements IPluginParams {
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
+  private loadHandler: (() => void) | null = null;
   constructor(params: IPluginParams) {
     const { options, breadcrumb, reportData } = params;
     this.options = options;
@@ -39,7 +40,7 @@ export class PerformancePlugin implements IPluginParams {
 
   getSourceData() {
     const performance = _global.performance;
-    addEventListenerTo(_global, "load", () => {
+    this.loadHandler = () => {
       // 上报资源列表
       this.reportData.send({
         type: EVENT_TYPE.PERFORMANCE,
@@ -67,26 +68,33 @@ export class PerformancePlugin implements IPluginParams {
           status: STATUS_CODE.OK,
         });
       }
-    });
+    };
+    addEventListenerTo(_global, "load", this.loadHandler);
+  }
+
+  destroy() {
+    if (this.loadHandler) {
+      _global.removeEventListener("load", this.loadHandler);
+      this.loadHandler = null;
+    }
   }
 }
 
-export function getResource(): PerformanceResourceTiming[] {
-  const entries = performance.getEntriesByType("resource");
-  // 过滤掉非静态资源的 fetch、 xmlhttprequest、beacon
-  let list = entries.filter((entry) => {
-    return (
-      ["fetch", "xmlhttprequest", "beacon"].indexOf(entry.initiatorType) === -1
-    );
-  });
-
-  if (list.length) {
-    list = JSON.parse(JSON.stringify(list));
-    list.forEach((entry: any) => {
-      entry.isCache = isCache(entry);
-    });
-  }
-  return list;
+export function getResource(): any[] {
+  const entries = performance.getEntriesByType(
+    "resource"
+  ) as PerformanceResourceTiming[];
+  // 过滤掉非静态资源的 fetch、xmlhttprequest、beacon，并标记是否命中缓存
+  return entries
+    .filter(
+      (entry) =>
+        ["fetch", "xmlhttprequest", "beacon"].indexOf(entry.initiatorType) ===
+        -1
+    )
+    .map((entry) => ({
+      ...(typeof entry.toJSON === "function" ? entry.toJSON() : entry),
+      isCache: isCache(entry),
+    }));
 }
 
 // 判断资料是否来自缓存

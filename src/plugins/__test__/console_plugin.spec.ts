@@ -140,6 +140,7 @@ describe("ConsolePlugin", () => {
       vi.stubGlobal("console", mockConsole);
       vi.stubGlobal("window", { console: mockConsole });
 
+      consolePlugin.destroy();
       consolePlugin.replace();
 
       // 验证所有方法都被替换了
@@ -180,9 +181,12 @@ describe("ConsolePlugin", () => {
       vi.stubGlobal("console", mockConsole);
       vi.stubGlobal("window", { console: mockConsole });
 
-      const handleConsoleSpy = vi.spyOn(consolePlugin, "handleConsole");
-
-      consolePlugin.replace();
+      const freshPlugin = new ConsolePlugin({
+        options: mockOptions,
+        breadcrumb: mockBreadcrumb,
+        reportData: mockReportData,
+      });
+      const handleConsoleSpy = vi.spyOn(freshPlugin, "handleConsole");
 
       // 调用被替换的console方法
       global.console.log("test message", "arg2");
@@ -209,9 +213,12 @@ describe("ConsolePlugin", () => {
       vi.stubGlobal("console", mockConsole);
       vi.stubGlobal("window", { console: mockConsole });
 
-      const handleConsoleSpy = vi.spyOn(consolePlugin, "handleConsole");
-
-      consolePlugin.replace();
+      const freshPlugin = new ConsolePlugin({
+        options: mockOptions,
+        breadcrumb: mockBreadcrumb,
+        reportData: mockReportData,
+      });
+      const handleConsoleSpy = vi.spyOn(freshPlugin, "handleConsole");
 
       // 测试所有级别
       global.console.log("log message");
@@ -249,7 +256,11 @@ describe("ConsolePlugin", () => {
       vi.stubGlobal("console", mockConsole);
       vi.stubGlobal("window", { console: mockConsole });
 
-      consolePlugin.replace();
+      new ConsolePlugin({
+        options: mockOptions,
+        breadcrumb: mockBreadcrumb,
+        reportData: mockReportData,
+      });
 
       global.console.log("test");
       global.console.error("error");
@@ -268,9 +279,12 @@ describe("ConsolePlugin", () => {
       vi.stubGlobal("console", mockConsole);
       vi.stubGlobal("window", { console: mockConsole });
 
-      const handleConsoleSpy = vi.spyOn(consolePlugin, "handleConsole");
-
-      consolePlugin.replace();
+      const freshPlugin = new ConsolePlugin({
+        options: mockOptions,
+        breadcrumb: mockBreadcrumb,
+        reportData: mockReportData,
+      });
+      const handleConsoleSpy = vi.spyOn(freshPlugin, "handleConsole");
 
       // 调用被替换的方法，即使原始方法为null
       // @ts-ignore

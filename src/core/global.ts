@@ -2,8 +2,17 @@ import { IOptionsParams } from "../typings/options";
 import { Breadcrumb } from "./breadcrumb";
 import { ReportDataController } from "./report";
 import { BasePlugin } from "../typings/base";
+import { PLUGIN_TYPE } from "./constant";
 
 export const _global = window;
+
+type ErrorCapturePlugin = BasePlugin & {
+  handleError?(err: Error): void;
+  handleReactError?(
+    error: Error,
+    errorInfo?: { componentStack?: string; digest?: string }
+  ): void;
+};
 
 // 设备信息类型定义
 export interface DeviceInfo {
@@ -25,8 +34,18 @@ export class Global {
 
   static errorBoundary(err: Error) {
     const errorPlugin = this.plugins?.find(
-      (item: { name: string }) => item.name === "ERROR_PLUGIN"
-    );
-    errorPlugin?.handleError(err);
+      (item) => item.name === PLUGIN_TYPE.ERROR_PLUGIN
+    ) as ErrorCapturePlugin | undefined;
+    errorPlugin?.handleError?.(err);
+  }
+
+  static captureReactError(
+    error: Error,
+    errorInfo?: { componentStack?: string; digest?: string }
+  ) {
+    const errorPlugin = this.plugins?.find(
+      (item) => item.name === PLUGIN_TYPE.ERROR_PLUGIN
+    ) as ErrorCapturePlugin | undefined;
+    errorPlugin?.handleReactError?.(error, errorInfo);
   }
 }
