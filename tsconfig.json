@@ -108,6 +108,9 @@
     "examples/**/*",
     "example/**/*",
     "node_modules",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "src/**/__test__/**",
+    "src/**/*.spec.ts",
+    "src/**/*.test.ts"
   ]
 }

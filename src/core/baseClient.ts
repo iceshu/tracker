@@ -21,8 +21,10 @@ export class BaseBrowserClient {
   #registeredPlugins: Map<string, BasePlugin>;
   #baseDeviceInfo = {};
   constructor(options: IOptionsParams, plugins: BasePlugin[]) {
-    this.#options =
-      process.env.NODE_ENV === "test" ? options : readonly(options);
+    // 浏览器环境无 process，用 globalThis 安全读取，避免 UMD 下 ReferenceError；测试态保留可变 options
+    const isTestEnv =
+      (globalThis as any)?.process?.env?.NODE_ENV === "test";
+    this.#options = isTestEnv ? options : readonly(options);
     this.#registeredPlugins = new Map();
     const { maxBreadcrumbs = DEFAULTS.MAX_BREADCRUMBS, beforePushBreadcrumb } =
       options;
