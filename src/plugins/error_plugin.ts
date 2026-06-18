@@ -91,9 +91,9 @@ export class ErrorPlugin implements ReplacePlugin {
         return;
       }
       // vue和react捕获的报错使用ev解析，异步错误使用ev.error解析
-      const { fileName, columnNumber, lineNumber } = this.parseStackTrace(
-        !target ? (ev as any) : ev.error
-      );
+      const errorObj = !target ? (ev as any) : ev.error;
+      const { fileName, columnNumber, lineNumber } =
+        this.parseStackTrace(errorObj);
 
       const errorData = {
         type: EVENT_TYPE.ERROR,
@@ -105,6 +105,8 @@ export class ErrorPlugin implements ReplacePlugin {
           fileName,
           line: lineNumber,
           column: columnNumber,
+          // 完整堆栈字符串（含整条调用链与函数名），仅 frame0 不足以定位问题
+          stack: errorObj?.stack,
         },
       };
       this.breadcrumb.push({
