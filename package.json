@@ -1,6 +1,6 @@
 {
   "name": "tc-tracker",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "monitor web performance",
   "keywords": [
     "performance",

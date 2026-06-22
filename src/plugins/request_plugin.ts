@@ -127,12 +127,14 @@ export class RequestPlugin {
           url,
           response: "",
         };
-        // 获取配置的headers；保留 setRequestHeader 别名以兼容旧的 beforeAppAjaxSend 用法
-        const headers = new Headers(config.headers || {});
-        (headers as any).setRequestHeader = headers.set.bind(headers);
-        _this.options?.beforeAppAjaxSend?.({ method, url }, headers);
-
-        config = Object.assign({}, config, { headers });
+        // 仅在配置了 beforeAppAjaxSend 时才介入请求头；否则保持请求原样透传。
+        // 关键：fetch(Request) 形态下若注入 headers 会覆盖 Request 已签名的头（如 AWS SDK SigV4），导致 S3 等鉴权失败
+        if (_this.options?.beforeAppAjaxSend) {
+          const headers = new Headers(config.headers || {});
+          (headers as any).setRequestHeader = headers.set.bind(headers);
+          _this.options.beforeAppAjaxSend({ method, url }, headers);
+          config = Object.assign({}, config, { headers });
+        }
         return originalFetch.apply(_global, [url, config]).then(
           (res: any) => {
             // 克隆一份，防止被标记已消费

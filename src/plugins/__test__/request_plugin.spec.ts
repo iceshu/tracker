@@ -100,6 +100,44 @@ describe("RequestPlugin fetch wiring (regression)", () => {
     plugin.destroy();
     expect((globalThis as any).fetch).toBe(original);
   });
+
+  it("does NOT inject headers (passthrough) without beforeAppAjaxSend, preserving signed Request headers (S3/SigV4)", async () => {
+    const calls: Array<Array<any>> = [];
+    (globalThis as any).fetch = vi.fn((...args: Array<any>) => {
+      calls.push(args);
+      return Promise.resolve(makeOkResponse(200));
+    });
+    makePlugin(); // no beforeAppAjaxSend configured
+
+    // AWS SDK style: a single pre-signed Request object
+    const signedRequest = {
+      url: "https://s3.example.com/bucket/part",
+      method: "PUT",
+      headers: new Headers({ authorization: "AWS4-HMAC-SHA256 ..." }),
+    };
+    await (globalThis as any).fetch(signedRequest);
+    await flush();
+
+    expect(calls).toHaveLength(1);
+    // first arg must be the same Request, untouched
+    expect(calls[0][0]).toBe(signedRequest);
+    // second arg must NOT carry a headers key (would override the Request's signed headers)
+    expect(calls[0][1]?.headers).toBeUndefined();
+  });
+
+  it("injects headers only when beforeAppAjaxSend is configured", async () => {
+    const calls: Array<Array<any>> = [];
+    (globalThis as any).fetch = vi.fn((...args: Array<any>) => {
+      calls.push(args);
+      return Promise.resolve(makeOkResponse(200));
+    });
+    makePlugin({ beforeAppAjaxSend: () => undefined } as any);
+
+    await (globalThis as any).fetch("https://api.example.com/x", { method: "GET" });
+    await flush();
+
+    expect(calls[0][1]?.headers).toBeInstanceOf(Headers);
+  });
 });
 
 describe("RequestPlugin.handleData", () => {
