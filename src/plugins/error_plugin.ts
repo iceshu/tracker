@@ -65,8 +65,8 @@ export class ErrorPlugin implements ReplacePlugin {
           lineNumber: stackFrame.lineNumber || defaults.lineNumber,
         };
       }
-    } catch (parseError) {
-      console.warn("ErrorStackParser failed to parse stack:", parseError);
+    } catch {
+      // reason 非标准 Error / 无可解析堆栈时(unhandledrejection 常见)静默降级为默认位置，避免污染控制台
     }
 
     return defaults;

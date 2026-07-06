@@ -173,10 +173,8 @@ describe("ErrorPlugin", () => {
 
       errorPlugin.handleError(mockError);
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "ErrorStackParser failed to parse stack:",
-        expect.any(Error)
-      );
+      // 解析失败应静默降级，不再打 console.warn 噪音
+      expect(consoleSpy).not.toHaveBeenCalled();
 
       expect(mockBreadcrumb.push).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -351,10 +349,8 @@ describe("ErrorPlugin", () => {
 
       errorPlugin.handleUnhandledRejection(mockRejectionEvent);
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "ErrorStackParser failed to parse stack:",
-        expect.any(Error)
-      );
+      // 解析失败应静默降级，不再打 console.warn 噪音
+      expect(consoleSpy).not.toHaveBeenCalled();
 
       consoleSpy.mockRestore();
     });

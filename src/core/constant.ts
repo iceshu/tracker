@@ -6,7 +6,7 @@ export const SDK = {
  * 默认配置常量
  */
 export const DEFAULTS = {
-  MAX_BREADCRUMBS: 20,
+  MAX_BREADCRUMBS: 10,
   THROTTLE_DELAY: 0,
   MAX_STRING_LENGTH: 1000,
   MAX_TEXT_CONTENT_LENGTH: 50,

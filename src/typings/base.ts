@@ -1,5 +1,6 @@
 import { Breadcrumb } from "../core/breadcrumb";
 import { ReportDataController } from "../core/report";
+import { DEFAULTS } from "../core/constant";
 import { BreadcrumbItem } from "./breadcrumb";
 import { ReportData } from "./common";
 import { IOptionsParams } from "./options";
@@ -25,9 +26,11 @@ export abstract class BaseClient {
     #registeredPlugins: WeakMap<any, any>;
 
     constructor(options: IOptionsParams, plugins: BasePlugin[]) {
+        const maxBreadcrumbs = options.maxBreadcrumbs ?? DEFAULTS.MAX_BREADCRUMBS;
+        options.maxBreadcrumbs = maxBreadcrumbs;
         this.#options = options;
         this.#registeredPlugins = new Map();
-        const { maxBreadcrumbs, beforePushBreadcrumb } = options;
+        const { beforePushBreadcrumb } = options;
         this.#breadcrumb = new Breadcrumb(maxBreadcrumbs, beforePushBreadcrumb);
         this.#reportData = new ReportDataController({
             options,

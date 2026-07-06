@@ -24,17 +24,18 @@ export class BaseBrowserClient {
     // 浏览器环境无 process，用 globalThis 安全读取，避免 UMD 下 ReferenceError；测试态保留可变 options
     const isTestEnv =
       (globalThis as any)?.process?.env?.NODE_ENV === "test";
+    const maxBreadcrumbs = options.maxBreadcrumbs ?? DEFAULTS.MAX_BREADCRUMBS;
+    options.maxBreadcrumbs = maxBreadcrumbs;
     this.#options = isTestEnv ? options : readonly(options);
     this.#registeredPlugins = new Map();
-    const { maxBreadcrumbs = DEFAULTS.MAX_BREADCRUMBS, beforePushBreadcrumb } =
-      options;
+    const { beforePushBreadcrumb } = options;
     this.#breadcrumb = new Breadcrumb(maxBreadcrumbs, beforePushBreadcrumb);
     this.#reportData = new ReportDataController({
-      options,
+      options: this.#options,
       breadcrumb: this.#breadcrumb,
     });
 
-    Global.options = options;
+    Global.options = this.#options;
     Global.breadcrumb = this.#breadcrumb;
     Global.reportData = this.#reportData;
     this.initializePlugins(plugins);

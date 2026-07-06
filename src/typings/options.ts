@@ -1,8 +1,11 @@
 import { IAnyObject } from "./common";
+import type { BreadcrumbData } from "../core/typing";
 
 export interface IOptionsParams {
   dsn: string;
   appVersion?: string; // 引用方应用的版本号，用于区分不同版本的问题
+  maxBreadcrumbs?: number; // 用户行为栈最大长度，默认 DEFAULTS.MAX_BREADCRUMBS
+  beforePushBreadcrumb?: (data: BreadcrumbData) => BreadcrumbData | null;
   filterXhrUrlRegExp?: RegExp;
   filterResourceUrlRegExp?: RegExp;
   skipLocalName?: (e: HTMLElement) => boolean;

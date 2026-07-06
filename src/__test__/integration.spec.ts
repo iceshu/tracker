@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { TrackInit } from "../index";
 import { IOptionsParams } from "../typings/options";
-import { EVENT_TYPE } from "../core/constant";
+import { DEFAULTS } from "../core/constant";
+import { Global } from "../core/global";
 
 // Mock _global to point to our mock window and document
 vi.mock("../core/global", async (importOriginal) => {
@@ -117,7 +118,7 @@ describe("Integration Tests", () => {
     it("should add Vue plugin when vue option is provided", () => {
       const mockVue = {
         config: {
-          errorHandler: null,
+          errorHandler: undefined,
         },
         version: "3.0.0",
       };
@@ -138,7 +139,7 @@ describe("Integration Tests", () => {
       const logSpy = vi.spyOn(console, "log");
       const errorSpy = vi.spyOn(console, "error");
 
-      const tracker = TrackInit({
+      TrackInit({
         ...mockOptions,
         supportPlugins: ["ConsolePlugin"],
       });
@@ -159,7 +160,7 @@ describe("Integration Tests", () => {
       // 清除之前的调用历史
       vi.clearAllMocks();
 
-      const tracker = TrackInit({
+      TrackInit({
         ...mockOptions,
         supportPlugins: ["ErrorPlugin"],
       });
@@ -188,7 +189,7 @@ describe("Integration Tests", () => {
       // 清除之前的调用历史
       vi.clearAllMocks();
 
-      const tracker = TrackInit({
+      TrackInit({
         ...mockOptions,
         supportPlugins: ["ErrorPlugin"],
       });
@@ -204,7 +205,7 @@ describe("Integration Tests", () => {
 
   describe("DOM Plugin Integration", () => {
     it("should capture click events", () => {
-      const tracker = TrackInit({
+      TrackInit({
         ...mockOptions,
         supportPlugins: ["DomPlugin"],
       });
@@ -250,7 +251,18 @@ describe("Integration Tests", () => {
   });
 
   describe("Configuration Options", () => {
-    it("should respect maxBreadcrumbs option", () => {
+    it("should expose default maxBreadcrumbs when omitted", () => {
+      const tracker = TrackInit({
+        dsn: mockOptions.dsn,
+        apikey: mockOptions.apikey,
+        supportPlugins: ["ConsolePlugin"],
+      });
+
+      expect(tracker.getOptions().maxBreadcrumbs).toBe(DEFAULTS.MAX_BREADCRUMBS);
+      expect(Global.breadcrumb?.maxBreadcrumbs).toBe(DEFAULTS.MAX_BREADCRUMBS);
+    });
+
+    it("should expose explicit maxBreadcrumbs on options and global breadcrumb", () => {
       const tracker = TrackInit({
         ...mockOptions,
         maxBreadcrumbs: 5,
@@ -258,13 +270,14 @@ describe("Integration Tests", () => {
       });
 
       expect(tracker.getOptions().maxBreadcrumbs).toBe(5);
+      expect(Global.breadcrumb?.maxBreadcrumbs).toBe(5);
     });
 
     it("should handle missing dsn gracefully", () => {
       const optionsWithoutDsn = {
         apikey: "test-key",
         supportPlugins: ["ConsolePlugin"],
-      } as IOptionsParams;
+      } as unknown as IOptionsParams;
 
       expect(() => {
         TrackInit(optionsWithoutDsn);
@@ -305,7 +318,7 @@ describe("Integration Tests", () => {
     it("should handle rapid console calls without issues", () => {
       const logSpy = vi.spyOn(console, "log");
 
-      const tracker = TrackInit({
+      TrackInit({
         ...mockOptions,
         supportPlugins: ["ConsolePlugin"],
       });
@@ -319,7 +332,7 @@ describe("Integration Tests", () => {
     });
 
     it("should handle complex error objects", () => {
-      const tracker = TrackInit({
+      TrackInit({
         ...mockOptions,
         supportPlugins: ["ErrorPlugin"],
       });

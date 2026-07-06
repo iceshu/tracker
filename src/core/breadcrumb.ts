@@ -9,7 +9,7 @@ export class Breadcrumb {
   constructor(
     maxStackSize: number = DEFAULTS.MAX_BREADCRUMBS,
     private beforePushCallback:
-      | ((data: BreadcrumbData) => BreadcrumbData)
+      | ((data: BreadcrumbData) => BreadcrumbData | null)
       | null = null
   ) {
     this.stack = [];
