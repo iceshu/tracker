@@ -16,12 +16,13 @@ export interface IOptionsParams {
   throttleDelayTime?: 0;
   supportPlugins?: string[];
   getUserId?: () => string | number;
-  overTime?: number;
+  overTime?: number; // 路由跳转慢检测阈值（毫秒），默认 3000，仅 HistoryPlugin 使用
+  requestTimeout?: number; // HTTP 超时判定阈值（毫秒），默认 60000；决定超时文案与 ignoreErrors.timeoutUrls 的命中
   resourceLoadTime?: number;
   wrapElementCallback?: (element: HTMLElement) => void;
   // 请求错误过滤配置（降噪）
   ignoreErrors?: {
-    // 忽略超时错误的 URL 模式列表（如非关键接口：公告、广告等）
+    // 忽略「超时类」错误（Status=0 且耗时达到 requestTimeout*0.95）的 URL 模式列表（如非关键轮询：公告、未读数等）
     timeoutUrls?: string[];
     // 自定义错误过滤函数，返回 true 表示忽略该错误
     customFilter?: (data: {
