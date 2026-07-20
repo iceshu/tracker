@@ -157,8 +157,11 @@ export class PerformancePlugin implements IPluginParams {
       });
       const memory = (performance as Performance & { memory?: BrowserMemory })
         .memory;
-      // 启用趋势监控后只在极端增长时上报，避免再发送无条件的 load 内存事件。
-      if (memory && !this.options.memoryMonitor?.enabled) {
+      // 无条件上报 load 时的内存基线，与 memoryMonitor 是否启用无关：
+      // 每次页面加载仅一条、体积极小，不构成上报压力；而开关的语义是
+      // 「增加异常检测」而非「移除基线指标」—— 关掉它会让接入方开启监控后
+      // 看板曲线无声中断，且异常事件里的数字也失去了可对照的基线
+      if (memory) {
         this.reportData.send({
           type: EVENT_TYPE.PERFORMANCE,
           name: "memory",

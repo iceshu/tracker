@@ -48,22 +48,38 @@ describe("Queue", () => {
     });
 
     it("should execute function immediately if no requestIdleCallback or Promise", () => {
-      const mockFn = vi.fn();
+      // 用普通函数计数而非 vi.fn()：vitest 的 mock 实现会对返回值做
+      // `instanceof Promise` 来追踪 promise，全局 Promise 被置空时会直接抛错
+      let callCount = 0;
+      const mockFn = () => {
+        callCount += 1;
+      };
 
-      // Mock global without requestIdleCallback and Promise
-      const originalGlobal = global;
-      // @ts-ignore
-      global.requestIdleCallback = undefined;
-      // @ts-ignore
-      global.Promise = undefined;
+      // 逐个保存真实值：`const originalGlobal = global` 存的是同一个对象的引用，
+      // 后面的 Object.assign(global, originalGlobal) 是自赋值，恢复不了任何东西
+      const originalRequestIdleCallback = global.requestIdleCallback;
+      const originalPromise = global.Promise;
+      let stackLength: number;
+      try {
+        // @ts-ignore
+        global.requestIdleCallback = undefined;
+        // @ts-ignore
+        global.Promise = undefined;
 
-      queue.addFn(mockFn);
+        queue.addFn(mockFn);
+        // 只取值，不在这里断言：vitest 的断言实现本身依赖全局 Promise
+        stackLength = queue.allStack.length;
+      } finally {
+        // 必须放在 finally：断言失败也不能把坏掉的全局泄漏出去。
+        // 全局 Promise 一旦是 undefined，vitest 运行时自己就会崩，
+        // 整个文件的用例会全部无法执行（且不会被报成失败）
+        global.requestIdleCallback = originalRequestIdleCallback;
+        global.Promise = originalPromise;
+      }
 
-      expect(mockFn).toHaveBeenCalledTimes(1);
-      expect(queue.allStack).toHaveLength(0);
-
-      // Restore
-      Object.assign(global, originalGlobal);
+      // 两者都不可用时应绕过队列直接执行
+      expect(callCount).toBe(1);
+      expect(stackLength).toBe(0);
     });
 
     it("should add function to stack when requestIdleCallback is available", () => {
@@ -224,6 +240,32 @@ describe("Queue", () => {
       expect(queue.allStack).toHaveLength(2);
 
       queue.clear();
+      expect(queue.allStack).toHaveLength(0);
+    });
+
+    it("resumes scheduling after clear() drops a pending batch", () => {
+      const scheduled: Array<() => void> = [];
+      // @ts-ignore - 手动接管排期，避免依赖真实的 idle 回调时机
+      global.requestIdleCallback = vi.fn((callback: () => void) => {
+        scheduled.push(callback);
+        return 1;
+      });
+
+      queue.addFn(vi.fn());
+      expect(scheduled).toHaveLength(1);
+
+      // 清掉待上报批次，再让已排期的 flush 落地（此时栈已空）
+      queue.clear();
+      scheduled[0]();
+
+      // isFlushing 必须已复位：否则后续 addFn 只入栈、永不排期，
+      // 上报静默停止且队列无限增长
+      const second = vi.fn();
+      queue.addFn(second);
+      expect(scheduled).toHaveLength(2);
+
+      scheduled[1]();
+      expect(second).toHaveBeenCalledTimes(1);
       expect(queue.allStack).toHaveLength(0);
     });
   });
