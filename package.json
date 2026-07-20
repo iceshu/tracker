@@ -17,6 +17,7 @@
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest --watch",
     "build": "cross-env NODE_ENV=production rollup -c rollup.config.mjs",
+    "prepublishOnly": "npm run test:run && npm run build",
     "dev:watch": "npm run dev && yalc push --watch",
     "watch:yalc": "yalc push --watch",
     "dev": "rollup -c rollup.config.mjs --watch"

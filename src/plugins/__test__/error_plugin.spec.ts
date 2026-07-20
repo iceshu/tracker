@@ -333,6 +333,45 @@ describe("ErrorPlugin", () => {
       );
     });
 
+    it("should report the full stack so the throwing call site stays identifiable", async () => {
+      const mockRejectionEvent = {
+        reason: {
+          message: "Promise rejection",
+          stack: "Error: Promise rejection\n    at save (draft.ts:42:9)",
+        },
+      } as PromiseRejectionEvent;
+
+      const ErrorStackParser = await import("error-stack-parser");
+      vi.mocked(ErrorStackParser.default.parse).mockReturnValue([
+        { fileName: "promise.js", lineNumber: 15, columnNumber: 8 },
+      ]);
+
+      errorPlugin.handleUnhandledRejection(mockRejectionEvent);
+
+      expect(mockReportData.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stack: "Error: Promise rejection\n    at save (draft.ts:42:9)",
+        })
+      );
+    });
+
+    it("should leave stack undefined when the rejection reason is not an Error", async () => {
+      const mockRejectionEvent = {
+        reason: "plain string rejection",
+      } as PromiseRejectionEvent;
+
+      const ErrorStackParser = await import("error-stack-parser");
+      vi.mocked(ErrorStackParser.default.parse).mockReturnValue([
+        { fileName: "promise.js", lineNumber: 15, columnNumber: 8 },
+      ]);
+
+      errorPlugin.handleUnhandledRejection(mockRejectionEvent);
+
+      expect(mockReportData.send).toHaveBeenCalledWith(
+        expect.objectContaining({ stack: undefined })
+      );
+    });
+
     it("should handle parse errors gracefully", async () => {
       const mockRejectionEvent = {
         reason: {

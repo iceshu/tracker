@@ -176,6 +176,10 @@ export class ErrorPlugin implements ReplacePlugin {
       fileName,
       line: lineNumber,
       column: columnNumber,
+      // 与 handleError 对齐：frame0 的 fileName/line/column 只指向 Promise 的
+      // 最终拒绝点，定位不到链路上真正抛出的业务代码，缺了堆栈的 rejection
+      // 基本无法排查（reason 为非 Error 时本就没有堆栈，保持 undefined）
+      stack: (reason as Error | undefined)?.stack,
     };
 
     this.breadcrumb.push({
