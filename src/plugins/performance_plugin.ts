@@ -8,12 +8,103 @@ import { IOptionsParams } from "../typings/options";
 import { addEventListenerTo, getTimestamp } from "../utils";
 import { IPluginParams } from "./common";
 
+const MEBIBYTE = 1024 * 1024;
+const DEFAULT_MEMORY_SAMPLE_INTERVAL_MS = 60_000;
+const MIN_MEMORY_SAMPLE_INTERVAL_MS = 30_000;
+const DEFAULT_MEMORY_SAMPLE_WINDOW_SIZE = 6;
+const MIN_MEMORY_SAMPLE_WINDOW_SIZE = 3;
+const MAX_MEMORY_SAMPLE_WINDOW_SIZE = 12;
+const DEFAULT_MIN_USED_JS_HEAP_SIZE = 512 * MEBIBYTE;
+const DEFAULT_MIN_GROWTH_BYTES = 256 * MEBIBYTE;
+const DEFAULT_MIN_GROWTH_RATIO = 1.5;
+const MAX_RECENT_LONG_TASKS = 5;
+const MEMORY_REPORT_SESSION_KEY = "tc_tracker_memory_anomaly_reported";
+
+export const MEMORY_ANOMALY_EVENT_NAME = "memoryAnomaly";
+
+interface BrowserMemory {
+  jsHeapSizeLimit: number;
+  totalJSHeapSize: number;
+  usedJSHeapSize: number;
+}
+
+interface MemorySample extends BrowserMemory {
+  time: number;
+}
+
+interface MemoryMonitorConfig {
+  sampleIntervalMs: number;
+  sampleWindowSize: number;
+  minUsedJSHeapSize: number;
+  minGrowthBytes: number;
+  minGrowthRatio: number;
+  collectContext?: () => Record<string, unknown> | null;
+}
+
+interface MemoryTrend {
+  baselineUsedJSHeapSize: number;
+  currentUsedJSHeapSize: number;
+  recentFloorUsedJSHeapSize: number;
+  growthBytes: number;
+  growthRatio: number;
+  growthPerMinute: number;
+  windowDurationMs: number;
+}
+
+interface DomDiagnostics {
+  nodeCount: number;
+  imageCount: number;
+  videoCount: number;
+  canvasCount: number;
+  iframeCount: number;
+}
+
+interface LongTaskSample {
+  startTime: number;
+  duration: number;
+  name: string;
+}
+
+interface RecentActivity {
+  type: EVENT_TYPE;
+  status: STATUS_CODE;
+  time: number;
+  route?: {
+    from?: unknown;
+    to?: unknown;
+  };
+  request?: {
+    url?: string;
+    elapsedTime?: unknown;
+  };
+  target?: {
+    tagName?: unknown;
+    id?: unknown;
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export class PerformancePlugin implements IPluginParams {
   name = PLUGIN_TYPE.PERFORMANCE_PLUGIN;
   options: IOptionsParams;
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
   private loadHandler: (() => void) | null = null;
+  private memoryConfig: MemoryMonitorConfig | null = null;
+  private memoryTimer: number | null = null;
+  private memorySamples: Array<MemorySample> = [];
+  private memoryReported = false;
+  private sessionStartedAt = getTimestamp();
+  private initialDomDiagnostics: DomDiagnostics | null = null;
+  private longTaskObserver: PerformanceObserver | null = null;
+  private longTaskCount = 0;
+  private longTaskTotalDuration = 0;
+  private longTaskMaxDuration = 0;
+  private recentLongTasks: Array<LongTaskSample> = [];
+
   constructor(params: IPluginParams) {
     const { options, breadcrumb, reportData } = params;
     this.options = options;
@@ -21,13 +112,18 @@ export class PerformancePlugin implements IPluginParams {
     this.reportData = reportData;
     this.setup();
   }
+
   setup() {
     this.getSourceData();
     this.getPerformanceData();
+    this.startMemoryMonitoring();
   }
 
   getPerformanceData() {
-    getWebVitals((res: any) => {
+    getWebVitals((res: unknown) => {
+      if (!isRecord(res) || typeof res.name !== "string") {
+        return;
+      }
       this.reportData.send({
         type: EVENT_TYPE.PERFORMANCE,
         status: STATUS_CODE.OK,
@@ -51,18 +147,19 @@ export class PerformancePlugin implements IPluginParams {
         },
         time: getTimestamp(),
       });
-      const memory = (performance as any)["memory"];
-      // 上报内存情况, safari、firefox不支持该属性
-      if (memory) {
+      const memory = (performance as Performance & { memory?: BrowserMemory })
+        .memory;
+      // 启用趋势监控后只在极端增长时上报，避免再发送无条件的 load 内存事件。
+      if (memory && !this.options.memoryMonitor?.enabled) {
         this.reportData.send({
           type: EVENT_TYPE.PERFORMANCE,
           name: "memory",
           time: getTimestamp(),
           data: {
             memory: {
-              jsHeapSizeLimit: memory?.jsHeapSizeLimit,
-              totalJSHeapSize: memory?.totalJSHeapSize,
-              usedJSHeapSize: memory?.usedJSHeapSize,
+              jsHeapSizeLimit: memory.jsHeapSizeLimit,
+              totalJSHeapSize: memory.totalJSHeapSize,
+              usedJSHeapSize: memory.usedJSHeapSize,
             },
           },
           status: STATUS_CODE.OK,
@@ -72,18 +169,362 @@ export class PerformancePlugin implements IPluginParams {
     addEventListenerTo(_global, "load", this.loadHandler);
   }
 
+  private startMemoryMonitoring(): void {
+    this.memoryConfig = this.createMemoryConfig();
+    if (
+      !this.memoryConfig ||
+      this.wasMemoryAnomalyReportedInSession()
+    ) {
+      return;
+    }
+
+    const memory = this.readBrowserMemory();
+    if (!memory) {
+      return;
+    }
+
+    this.initialDomDiagnostics = this.collectDomDiagnostics();
+    this.observeLongTasks();
+    this.addMemorySample(memory);
+  }
+
+  private createMemoryConfig(): MemoryMonitorConfig | null {
+    const options = this.options.memoryMonitor;
+    if (!options?.enabled) {
+      return null;
+    }
+
+    return {
+      sampleIntervalMs: Math.max(
+        options.sampleIntervalMs ?? DEFAULT_MEMORY_SAMPLE_INTERVAL_MS,
+        MIN_MEMORY_SAMPLE_INTERVAL_MS
+      ),
+      sampleWindowSize: Math.min(
+        Math.max(
+          Math.floor(
+            options.sampleWindowSize ?? DEFAULT_MEMORY_SAMPLE_WINDOW_SIZE
+          ),
+          MIN_MEMORY_SAMPLE_WINDOW_SIZE
+        ),
+        MAX_MEMORY_SAMPLE_WINDOW_SIZE
+      ),
+      minUsedJSHeapSize: Math.max(
+        options.minUsedJSHeapSize ?? DEFAULT_MIN_USED_JS_HEAP_SIZE,
+        0
+      ),
+      minGrowthBytes: Math.max(
+        options.minGrowthBytes ?? DEFAULT_MIN_GROWTH_BYTES,
+        0
+      ),
+      minGrowthRatio: Math.max(
+        options.minGrowthRatio ?? DEFAULT_MIN_GROWTH_RATIO,
+        1
+      ),
+      collectContext: options.collectContext,
+    };
+  }
+
+  private readBrowserMemory(): BrowserMemory | null {
+    const memory = (
+      _global.performance as Performance & { memory?: BrowserMemory }
+    ).memory;
+    if (
+      !memory ||
+      !Number.isFinite(memory.jsHeapSizeLimit) ||
+      !Number.isFinite(memory.totalJSHeapSize) ||
+      !Number.isFinite(memory.usedJSHeapSize) ||
+      memory.usedJSHeapSize <= 0
+    ) {
+      return null;
+    }
+
+    return {
+      jsHeapSizeLimit: memory.jsHeapSizeLimit,
+      totalJSHeapSize: memory.totalJSHeapSize,
+      usedJSHeapSize: memory.usedJSHeapSize,
+    };
+  }
+
+  private addMemorySample(memory: BrowserMemory): void {
+    if (!this.memoryConfig || this.memoryReported) {
+      return;
+    }
+
+    this.memorySamples.push({
+      ...memory,
+      time: getTimestamp(),
+    });
+    if (this.memorySamples.length > this.memoryConfig.sampleWindowSize) {
+      this.memorySamples.shift();
+    }
+
+    const trend = this.getExtremeMemoryTrend();
+    if (trend) {
+      this.reportMemoryAnomaly(trend);
+      return;
+    }
+
+    this.scheduleNextMemorySample();
+  }
+
+  private scheduleNextMemorySample(): void {
+    if (!this.memoryConfig || this.memoryReported) {
+      return;
+    }
+
+    this.memoryTimer = _global.setTimeout(() => {
+      this.memoryTimer = null;
+      if (_global.document.visibilityState === "hidden") {
+        this.scheduleNextMemorySample();
+        return;
+      }
+
+      const memory = this.readBrowserMemory();
+      if (!memory) {
+        return;
+      }
+      this.addMemorySample(memory);
+    }, this.memoryConfig.sampleIntervalMs);
+  }
+
+  private getExtremeMemoryTrend(): MemoryTrend | null {
+    const config = this.memoryConfig;
+    if (!config || this.memorySamples.length < config.sampleWindowSize) {
+      return null;
+    }
+
+    const midpoint = Math.floor(this.memorySamples.length / 2);
+    let baselineUsedJSHeapSize = Number.POSITIVE_INFINITY;
+    let recentFloorUsedJSHeapSize = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < this.memorySamples.length; index += 1) {
+      const usedJSHeapSize = this.memorySamples[index].usedJSHeapSize;
+      if (index < midpoint) {
+        baselineUsedJSHeapSize = Math.min(
+          baselineUsedJSHeapSize,
+          usedJSHeapSize
+        );
+      } else {
+        recentFloorUsedJSHeapSize = Math.min(
+          recentFloorUsedJSHeapSize,
+          usedJSHeapSize
+        );
+      }
+    }
+
+    const firstSample = this.memorySamples[0];
+    const currentSample = this.memorySamples[this.memorySamples.length - 1];
+    const growthBytes =
+      recentFloorUsedJSHeapSize - baselineUsedJSHeapSize;
+    const growthRatio =
+      recentFloorUsedJSHeapSize / baselineUsedJSHeapSize;
+    const windowDurationMs = currentSample.time - firstSample.time;
+
+    if (
+      currentSample.usedJSHeapSize < config.minUsedJSHeapSize ||
+      growthBytes < config.minGrowthBytes ||
+      growthRatio < config.minGrowthRatio
+    ) {
+      return null;
+    }
+
+    return {
+      baselineUsedJSHeapSize,
+      currentUsedJSHeapSize: currentSample.usedJSHeapSize,
+      recentFloorUsedJSHeapSize,
+      growthBytes,
+      growthRatio,
+      growthPerMinute:
+        windowDurationMs > 0
+          ? growthBytes / (windowDurationMs / 60_000)
+          : 0,
+      windowDurationMs,
+    };
+  }
+
+  private reportMemoryAnomaly(trend: MemoryTrend): void {
+    if (this.memoryReported) {
+      return;
+    }
+    this.memoryReported = true;
+    this.persistMemoryReportMarker();
+    if (this.memoryTimer !== null) {
+      _global.clearTimeout(this.memoryTimer);
+      this.memoryTimer = null;
+    }
+
+    const currentMemory = this.memorySamples[this.memorySamples.length - 1];
+    this.reportData.send({
+      type: EVENT_TYPE.PERFORMANCE,
+      name: MEMORY_ANOMALY_EVENT_NAME,
+      status: STATUS_CODE.ERROR,
+      time: getTimestamp(),
+      message: "检测到持续且极端的 JS 堆内存增长",
+      data: {
+        memory: {
+          jsHeapSizeLimit: currentMemory.jsHeapSizeLimit,
+          totalJSHeapSize: currentMemory.totalJSHeapSize,
+          usedJSHeapSize: currentMemory.usedJSHeapSize,
+        },
+        trend: {
+          ...trend,
+          samples: this.memorySamples.map((sample) => ({ ...sample })),
+        },
+        diagnostics: {
+          sessionDurationMs: getTimestamp() - this.sessionStartedAt,
+          document: {
+            initial: this.initialDomDiagnostics,
+            current: this.collectDomDiagnostics(),
+          },
+          device: {
+            deviceMemory: (
+              _global.navigator as Navigator & { deviceMemory?: number }
+            ).deviceMemory,
+            hardwareConcurrency: _global.navigator.hardwareConcurrency,
+          },
+          longTasks: {
+            count: this.longTaskCount,
+            totalDuration: this.longTaskTotalDuration,
+            maxDuration: this.longTaskMaxDuration,
+            recent: this.recentLongTasks.map((task) => ({ ...task })),
+          },
+          recentActivity: this.collectRecentActivity(),
+          application: this.collectApplicationContext(),
+        },
+      },
+    });
+  }
+
+  private collectDomDiagnostics(): DomDiagnostics {
+    const document = _global.document;
+    return {
+      nodeCount: document.getElementsByTagName("*").length,
+      imageCount: document.getElementsByTagName("img").length,
+      videoCount: document.getElementsByTagName("video").length,
+      canvasCount: document.getElementsByTagName("canvas").length,
+      iframeCount: document.getElementsByTagName("iframe").length,
+    };
+  }
+
+  private collectRecentActivity(): Array<RecentActivity> {
+    return this.breadcrumb.getStack().map((item) => {
+      const activity: RecentActivity = {
+        type: item.type,
+        status: item.status,
+        time: item.time,
+      };
+      const data = isRecord(item.data) ? item.data : undefined;
+      if (item.type === EVENT_TYPE.HISTORY) {
+        activity.route = {
+          from: data?.from,
+          to: data?.to,
+        };
+      } else if (
+        item.type === EVENT_TYPE.FETCH ||
+        item.type === EVENT_TYPE.XHR
+      ) {
+        activity.request = {
+          url:
+            typeof data?.url === "string"
+              ? data.url.split(/[?#]/, 1)[0]
+              : undefined,
+          elapsedTime: data?.elapsedTime,
+        };
+      } else if (item.type === EVENT_TYPE.CLICK) {
+        const info = isRecord(data?.info) ? data.info : undefined;
+        activity.target = {
+          tagName: info?.tagName,
+          id: info?.id,
+        };
+      }
+      return activity;
+    });
+  }
+
+  private collectApplicationContext(): Record<string, unknown> | null {
+    if (!this.memoryConfig?.collectContext) {
+      return null;
+    }
+    try {
+      return this.memoryConfig.collectContext();
+    } catch {
+      return null;
+    }
+  }
+
+  private observeLongTasks(): void {
+    const Observer = _global.PerformanceObserver;
+    if (
+      !Observer ||
+      !Observer.supportedEntryTypes?.includes("longtask")
+    ) {
+      return;
+    }
+
+    try {
+      this.longTaskObserver = new Observer((list) => {
+        list.getEntries().forEach((entry) => {
+          this.longTaskCount += 1;
+          this.longTaskTotalDuration += entry.duration;
+          this.longTaskMaxDuration = Math.max(
+            this.longTaskMaxDuration,
+            entry.duration
+          );
+          this.recentLongTasks.push({
+            startTime: entry.startTime,
+            duration: entry.duration,
+            name: entry.name,
+          });
+          if (this.recentLongTasks.length > MAX_RECENT_LONG_TASKS) {
+            this.recentLongTasks.shift();
+          }
+        });
+      });
+      this.longTaskObserver.observe({ type: "longtask", buffered: true });
+    } catch {
+      this.longTaskObserver = null;
+    }
+  }
+
+  private wasMemoryAnomalyReportedInSession(): boolean {
+    try {
+      return (
+        _global.sessionStorage.getItem(MEMORY_REPORT_SESSION_KEY) === "1"
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  private persistMemoryReportMarker(): void {
+    try {
+      _global.sessionStorage.setItem(MEMORY_REPORT_SESSION_KEY, "1");
+    } catch {
+      // 存储不可用时仍由当前插件实例的 memoryReported 保证只上报一次。
+    }
+  }
+
   destroy() {
     if (this.loadHandler) {
       _global.removeEventListener("load", this.loadHandler);
       this.loadHandler = null;
     }
+    if (this.memoryTimer !== null) {
+      _global.clearTimeout(this.memoryTimer);
+      this.memoryTimer = null;
+    }
+    if (this.longTaskObserver) {
+      this.longTaskObserver.disconnect();
+      this.longTaskObserver = null;
+    }
+    this.memorySamples = [];
+    this.recentLongTasks = [];
   }
 }
 
-export function getResource(): any[] {
+export function getResource(): Array<Record<string, unknown>> {
   const entries = performance.getEntriesByType(
     "resource"
-  ) as PerformanceResourceTiming[];
+  ) as Array<PerformanceResourceTiming>;
   // 过滤掉非静态资源的 fetch、xmlhttprequest、beacon，并标记是否命中缓存
   return entries
     .filter(
@@ -91,10 +532,14 @@ export function getResource(): any[] {
         ["fetch", "xmlhttprequest", "beacon"].indexOf(entry.initiatorType) ===
         -1
     )
-    .map((entry) => ({
-      ...(typeof entry.toJSON === "function" ? entry.toJSON() : entry),
-      isCache: isCache(entry),
-    }));
+    .map((entry) => {
+      const serialized =
+        typeof entry.toJSON === "function" ? entry.toJSON() : entry;
+      return {
+        ...(isRecord(serialized) ? serialized : {}),
+        isCache: isCache(entry),
+      };
+    });
 }
 
 // 判断资料是否来自缓存
