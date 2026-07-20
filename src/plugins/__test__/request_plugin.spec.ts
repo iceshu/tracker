@@ -679,3 +679,120 @@ describe("wrapper safety (never break host requests)", () => {
     expect(summary).toBe("user=42");
   });
 });
+
+// 响应体是比请求体更容易失控的一侧：错误响应常驻 breadcrumb 栈，
+// 而每条上报都会附带整个栈 —— 不截断会让一份大响应被重复放大到后续所有上报
+describe("response payload is bounded (memory / report size)", () => {
+  const fetchGlobal = globalThis as { fetch: typeof fetch };
+  const realFetch = fetchGlobal.fetch;
+  const realXhrOpen = XMLHttpRequest.prototype.open;
+  const realXhrSend = XMLHttpRequest.prototype.send;
+  const livePlugins: Array<RequestPlugin> = [];
+
+  function makeLivePlugin(options?: Partial<IOptionsParams>) {
+    const made = makePlugin(options);
+    livePlugins.push(made.plugin);
+    return made;
+  }
+
+  afterEach(() => {
+    for (const plugin of livePlugins.splice(0)) {
+      plugin.destroy();
+    }
+    fetchGlobal.fetch = realFetch;
+    XMLHttpRequest.prototype.open = realXhrOpen;
+    XMLHttpRequest.prototype.send = realXhrSend;
+    vi.restoreAllMocks();
+  });
+
+  it("truncates an oversized error response instead of carrying it in the report", async () => {
+    const huge = "x".repeat(50_000);
+    fetchGlobal.fetch = vi.fn(() =>
+      Promise.resolve(new Response(huge, { status: 500 }))
+    ) as unknown as typeof fetch;
+    const { reportData } = makeLivePlugin({
+      handleHttpStatus: () => true,
+    } as Partial<IOptionsParams>);
+
+    await fetchGlobal.fetch("https://api.example.com/huge-error");
+    await flush();
+
+    expect(reportData.send).toHaveBeenCalledTimes(1);
+    const reported = reportData.send.mock.calls[0][0].data.response.data;
+    expect(typeof reported).toBe("string");
+    expect(reported).toContain("[truncated");
+    expect(reported).toContain("50000");
+    // 4KB 摘要 + 标记，绝不能是原样的 50KB
+    expect(reported.length).toBeLessThan(4200);
+  });
+
+  it("bounds the message built from a business-error response on an HTTP 200", async () => {
+    const huge = JSON.stringify({ code: 500, msg: "y".repeat(50_000) });
+    fetchGlobal.fetch = vi.fn(() =>
+      Promise.resolve(new Response(huge, { status: 200 }))
+    ) as unknown as typeof fetch;
+    // handleHttpStatus 在一次上报里会被调用两次：先决定是否保留 response，
+    // 再决定最终状态。返回值一致时 message 分支永远拿到空 response，
+    // 只有回调本身不稳定（依赖外部状态）才会走到「保留了大响应 + 判定为业务错误」，
+    // 这里显式构造该组合，验证 message 在这种情况下依然有界
+    let call = 0;
+    const { breadcrumb } = makeLivePlugin({
+      handleHttpStatus: () => ++call === 1,
+    } as Partial<IOptionsParams>);
+
+    await fetchGlobal.fetch("https://api.example.com/biz-error");
+    await flush();
+
+    expect(breadcrumb.push).toHaveBeenCalledTimes(1);
+    const { message } = breadcrumb.push.mock.calls[0][0].data;
+    expect(message).toContain("接口报错");
+    // 这条以 OK 状态常驻 breadcrumb，message 必须有界
+    expect(message.length).toBeLessThan(4400);
+  });
+
+  it("skips reading the body entirely when content-length exceeds the read cap", async () => {
+    const clone = vi.fn();
+    const res = {
+      status: 200,
+      headers: { get: (k: string) => (k === "content-length" ? "999999" : null) },
+      clone,
+    };
+    fetchGlobal.fetch = vi.fn(() =>
+      Promise.resolve(res)
+    ) as unknown as typeof fetch;
+    const { plugin, reportData } = makeLivePlugin({
+      handleHttpStatus: () => true,
+    } as Partial<IOptionsParams>);
+    const handleDataSpy = vi.spyOn(plugin, "handleData");
+
+    await fetchGlobal.fetch("https://api.example.com/big-download");
+    await flush();
+
+    // 不 clone 就不会 tee 响应流，整份大响应不会被缓冲进内存
+    expect(clone).not.toHaveBeenCalled();
+    // 元数据仍然照常上报
+    expect(handleDataSpy).toHaveBeenCalledTimes(1);
+    expect(handleDataSpy.mock.calls[0][0].Status).toBe(200);
+    expect(reportData.send).not.toHaveBeenCalled();
+  });
+
+  it("stores a summary on the xhr record, never the raw upload body", () => {
+    XMLHttpRequest.prototype.open = function (): void {};
+    XMLHttpRequest.prototype.send = function (): void {};
+    makeLivePlugin();
+
+    const xhr = new XMLHttpRequest();
+    const file = new File(["0123456789"], "report.pdf", {
+      type: "application/pdf",
+    });
+    xhr.open("POST", "https://api.example.com/upload");
+    xhr.send(file);
+    xhr.dispatchEvent(new Event("loadend"));
+
+    // record 挂在 xhr 实例上、生命周期跟随实例：持有原始 File 会让上传的文件无法释放
+    const record = (xhr as XMLHttpRequest & { record_xhr?: { requestData?: unknown } })
+      .record_xhr;
+    expect(typeof record?.requestData).toBe("string");
+    expect(record?.requestData).toBe("[File report.pdf 10B application/pdf]");
+  });
+});
