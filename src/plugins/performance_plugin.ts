@@ -18,6 +18,10 @@ const DEFAULT_MIN_USED_JS_HEAP_SIZE = 512 * MEBIBYTE;
 const DEFAULT_MIN_GROWTH_BYTES = 256 * MEBIBYTE;
 const DEFAULT_MIN_GROWTH_RATIO = 1.5;
 const MAX_RECENT_LONG_TASKS = 5;
+// 相邻采样点允许的最大间隔倍率。超过即视为采样断层（标签页切后台/被冻结、
+// 定时器节流、设备休眠），此时窗口不再是一段连续观测：跨断层比较会把
+// 「几小时前的那个点」当成基线，把一次跨时段的对比误判成「持续增长」
+const MEMORY_SAMPLE_GAP_TOLERANCE = 2;
 const MEMORY_REPORT_SESSION_KEY = "tc_tracker_memory_anomaly_reported";
 
 export const MEMORY_ANOMALY_EVENT_NAME = "memoryAnomaly";
@@ -104,6 +108,7 @@ export class PerformancePlugin implements IPluginParams {
   private longTaskTotalDuration = 0;
   private longTaskMaxDuration = 0;
   private recentLongTasks: Array<LongTaskSample> = [];
+  private isSetup = false;
 
   constructor(params: IPluginParams) {
     const { options, breadcrumb, reportData } = params;
@@ -114,6 +119,9 @@ export class PerformancePlugin implements IPluginParams {
   }
 
   setup() {
+    // 与 History/Request 插件一致：重复 setup 不得叠加监听器与采样定时器链
+    if (this.isSetup) return;
+    this.isSetup = true;
     this.getSourceData();
     this.getPerformanceData();
     this.startMemoryMonitoring();
@@ -250,9 +258,17 @@ export class PerformancePlugin implements IPluginParams {
       return;
     }
 
+    const time = getTimestamp();
+    // 采样出现断层就重新开窗：「持续增长」只有在一段连续观测上才成立，
+    // 否则一个跨了几小时的窗口会以每分钟几字节的真实增速报出「极端增长」，
+    // 而且会用掉本会话唯一的一次上报名额，把之后真正的泄漏顶掉
+    if (this.hasSamplingGap(time)) {
+      this.memorySamples = [];
+    }
+
     this.memorySamples.push({
       ...memory,
-      time: getTimestamp(),
+      time,
     });
     if (this.memorySamples.length > this.memoryConfig.sampleWindowSize) {
       this.memorySamples.shift();
@@ -265,6 +281,23 @@ export class PerformancePlugin implements IPluginParams {
     }
 
     this.scheduleNextMemorySample();
+  }
+
+  /**
+   * 距上一个采样点是否已超出容忍间隔。
+   * 以实际间隔判断而非只监听 visibilitychange，可同时覆盖标签页冻结、
+   * 定时器节流与设备休眠 —— 这些都会在窗口里留下同样的时间断层。
+   */
+  private hasSamplingGap(time: number): boolean {
+    const config = this.memoryConfig;
+    const lastSample = this.memorySamples[this.memorySamples.length - 1];
+    if (!config || !lastSample) {
+      return false;
+    }
+    return (
+      time - lastSample.time >
+      config.sampleIntervalMs * MEMORY_SAMPLE_GAP_TOLERANCE
+    );
   }
 
   private scheduleNextMemorySample(): void {
@@ -281,6 +314,9 @@ export class PerformancePlugin implements IPluginParams {
 
       const memory = this.readBrowserMemory();
       if (!memory) {
+        // 单次读数不可用（performance.memory 暂时取不到值）不能让采样链断掉，
+        // 否则整个标签页会话就此静默失效 —— 对一个专抓 OOM 的功能是最坏的失败模式
+        this.scheduleNextMemorySample();
         return;
       }
       this.addMemorySample(memory);
@@ -518,6 +554,7 @@ export class PerformancePlugin implements IPluginParams {
     }
     this.memorySamples = [];
     this.recentLongTasks = [];
+    this.isSetup = false;
   }
 }
 

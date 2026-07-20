@@ -117,4 +117,73 @@ describe("PerformancePlugin extreme memory monitoring", () => {
 
     plugin.destroy();
   });
+
+  // 采样链一旦断掉是静默的：不会报错、也不会有事件，
+  // 外部只会看到「没有内存问题」，因此必须有回归测试盯住
+  it("keeps sampling after a single unreadable memory reading", () => {
+    const send = vi.fn();
+    const plugin = createPlugin(send);
+
+    // 第 2 次采样时读数不可用（usedJSHeapSize 取到 0）
+    usedJSHeapSize = 0;
+    vi.advanceTimersByTime(30_000);
+
+    // 恢复后制造明确的持续暴涨
+    usedJSHeapSize = 300;
+    vi.advanceTimersByTime(30_000);
+    usedJSHeapSize = 900;
+    vi.advanceTimersByTime(30_000);
+    usedJSHeapSize = 1_500;
+    vi.advanceTimersByTime(30_000);
+
+    expect(
+      send.mock.calls.filter(
+        ([event]) => event.name === MEMORY_ANOMALY_EVENT_NAME
+      )
+    ).toHaveLength(1);
+
+    plugin.destroy();
+  });
+
+  it("restarts the window after a sampling gap instead of reporting across it", () => {
+    const send = vi.fn();
+    let hidden = false;
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => (hidden ? "hidden" : "visible"),
+    });
+    const plugin = createPlugin(send);
+
+    // 切后台 3 小时，期间不采样；回到前台后仅有两个新采样点
+    hidden = true;
+    vi.advanceTimersByTime(3 * 60 * 60_000);
+    hidden = false;
+
+    usedJSHeapSize = 300;
+    vi.advanceTimersByTime(30_000);
+    usedJSHeapSize = 900;
+    vi.advanceTimersByTime(30_000);
+
+    // 跨 3 小时断层的比较不构成「持续增长」，不得上报
+    expect(
+      send.mock.calls.some(
+        ([event]) => event.name === MEMORY_ANOMALY_EVENT_NAME
+      )
+    ).toBe(false);
+
+    // 断层之后窗口重新累积，真实的持续增长依然能报出来
+    usedJSHeapSize = 1_500;
+    vi.advanceTimersByTime(30_000);
+    const anomalies = send.mock.calls.filter(
+      ([event]) => event.name === MEMORY_ANOMALY_EVENT_NAME
+    );
+    expect(anomalies).toHaveLength(1);
+    // 窗口跨度必须是断层之后的连续观测，而不是那 3 小时
+    expect(anomalies[0][0].data.trend.windowDurationMs).toBeLessThanOrEqual(
+      60_000
+    );
+
+    hidden = false;
+    plugin.destroy();
+  });
 });
