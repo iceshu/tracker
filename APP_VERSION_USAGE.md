@@ -155,3 +155,54 @@ const tracker = TrackInit({
 
 两者相互独立，共同帮助你更好地定位和解决问题。
 
+## 本地持久化与刷新后恢复
+
+SDK 默认将经过 `beforeDataReport` 过滤的待发送事件写入 IndexedDB，再发送请求。网络失败、HTTP 非 2xx 或请求超时不会删除记录；下次 `TrackInit` 会异步补发，不阻塞初始化。
+
+```javascript
+const tracker = TrackInit({
+  dsn: 'https://your-api.com/report',
+  apikey: 'your-project',
+  appVersion: '1.0.0',
+  supportPlugins: ['ErrorPlugin', 'PerformancePlugin'],
+  memoryMonitor: {
+    enabled: true,
+    sampleIntervalMs: 60_000,
+  },
+  recovery: {
+    enabled: true,
+    maxEvents: 100,
+    maxBytes: 1024 * 1024,
+    maxAgeMs: 24 * 60 * 60 * 1000,
+  },
+});
+```
+
+### 事件与诊断快照
+
+| 数据 | 保存和恢复行为 |
+|------|----------------|
+| 待发送事件 | 过滤完成后固定为 JSON，事务提交后发送；收到 HTTP 2xx 才删除 |
+| `memoryDiagnosticSnapshot` | 启用 `PerformancePlugin` 和 `memoryMonitor.enabled` 后，首个有效内存样本及后续采样更新本页快照，不立即发送；同一标签页下一次启用监控时恢复 |
+| `memoryAnomaly` | 检测到持续极端增长时上报；确认送达后标记本会话已上报，恢复补发的确认同样生效；诊断采样继续进行 |
+
+补发保留事件原来的 `appVersion`、时间、URL、用户、会话和 `eventId`，不会套用新页面的版本或用户信息，也不会再次执行新页面的 `beforeDataReport`。正常刷新、导航、关闭及进程崩溃都可能留下快照；**`memoryDiagnosticSnapshot` 不代表已确认发生 crash 或 OOM**。
+
+### 容量、隐私与兼容边界
+
+- `maxEvents`、`maxBytes` 按 `dsn + apikey` 隔离，快照也计入限额；超限淘汰最旧记录，过期记录在访问存储时清理。字节数指 JSON payload 的 UTF-8 大小，不包含 IndexedDB 元数据。
+- 单个诊断快照最多 64 KiB，最多包含 12 个内存样本、20 条最近行为和 5 条最近长任务。超限、过滤拒绝或 hook 抛错会移除本页旧快照，避免保留已不允许保存的数据。
+- 沿用内存监控采样间隔：默认 60 秒，最短 30 秒。`collectContext` 现在也用于周期快照，应保持轻量，并避免采集敏感数据；`beforeDataReport` 在数据落盘前执行。
+- 设置 `recovery: { enabled: false }` 后，不读取、写入或补发持久化数据；普通事件仍直接发送。此设置不会删除已有记录，重新启用后仍可能补发未过期记录。
+- 诊断快照要求顶层页面、可用的 `sessionStorage` 和 Web Locks，以及浏览器提供有效的 `performance.memory`。不满足条件时不保证诊断快照恢复；iframe 和缺少 Web Locks 的环境仍支持普通事件待发送队列。
+- 诊断快照仅在原标签页恢复，并要求当前仍启用性能插件和内存监控；其他活跃标签页的快照不会被领取。同一文档多次初始化不会恢复自己的快照。
+- IndexedDB 不可用、写入超时或存储空间不足时，普通事件降级为直接发送，不将存储错误抛给业务；此时无法保证刷新后恢复。超过存储总容量的普通事件也只做直接发送。
+- `destroy()` 停止采样和后续发送、取消当前请求，但保留已落盘的未确认事件与最后快照。崩溃时只能恢复最后一次成功提交的数据，尚未提交的最后一段仍可能丢失。
+
+### 收集端契约
+
+上报使用可检查响应的 `fetch` POST，请求体为 JSON。跨域收集接口必须正确配置 CORS；只有可读取的 HTTP 2xx 响应才被视为确认，10 秒未完成的请求按失败保留，不做无限重试。
+
+服务端应以项目和 `eventId` 作为幂等键，重复提交仍返回成功。服务端可能已经接收事件，但浏览器在删除本地记录前崩溃，因此补发可能重复；稳定 `eventId` 并不等于客户端能保证 exactly-once。本仓库仅包含 SDK，不包含收集端去重实现。
+
+

@@ -115,6 +115,8 @@ export interface ReportData
   pageUrl: string; // 页面地址
   time: number; // 发生时间
   uuid: string; // 页面唯一标识
+  eventId: string; // 单条事件稳定标识；重放时不变，供收集端幂等去重
+  sessionID: string; // 事件发生时的标签页会话标识，恢复上报时保留
   apikey: string; // 项目id
   status: string; // 事件状态
   sdkVersion: string; // 版本信息

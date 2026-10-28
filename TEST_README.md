@@ -35,13 +35,14 @@ src/
 ├── core/
 │   └── __test__/
 │       ├── breadcrumb.spec.ts       # 面包屑功能测试
-│       ├── queue.spec.ts            # 队列功能测试
+│       ├── delivery-store.spec.ts  # IndexedDB 容量、期限与原子恢复
 │       ├── report.spec.ts           # 报告功能测试
 │       └── filter_url.spec.ts       # URL过滤测试（已存在）
 ├── plugins/
 │   └── __test__/
 │       ├── console_plugin.spec.ts   # Console插件测试
-│       └── error_plugin.spec.ts     # Error插件测试
+│       ├── error_plugin.spec.ts     # Error插件测试
+│       └── performance_plugin.spec.ts # 内存异常与诊断快照
 └── utils/
     └── __test__/
         └── utils.spec.ts            # 工具函数测试
@@ -63,17 +64,17 @@ src/
   - 事件分类
   - 回调处理
 
-- **队列系统** (`queue.spec.ts`)
-  - 单例模式
-  - 异步任务调度
-  - 错误处理
-  - 性能优化
+- **持久化存储** (`delivery-store.spec.ts`)
+  - 条数、字节容量与过期清理
+  - 并发快照写入和原子恢复
+  - 事务中止、数据库不可用与超时
 
 - **报告系统** (`report.spec.ts`)
-  - 数据上报
-  - 多种上报方式（Beacon、Image、XHR）
-  - 数据转换和过滤
-  - 用户认证
+  - 先持久化、HTTP 2xx 确认后删除
+  - 网络失败后恢复原上下文和稳定事件 ID
+  - 网络挂起时继续落盘、销毁与初始化竞争
+  - 项目隔离、禁用恢复、过滤和存储降级
+  - 诊断快照身份、复制标签页与 BFCache
 
 ### 插件测试
 - **Console插件** (`console_plugin.spec.ts`)
@@ -86,6 +87,11 @@ src/
   - 资源加载错误处理
   - Promise rejection处理
   - 错误去重机制
+
+- **Performance插件** (`performance_plugin.spec.ts`)
+  - 持续内存增长、瞬时峰值和采样断层
+  - 有界诊断快照与销毁后的采样停止
+  - 普通发送及恢复发送确认后的会话去重
 
 ### 集成测试
 - **完整流程测试** (`integration.spec.ts`)
@@ -101,6 +107,7 @@ src/
 - **覆盖率**: V8 provider
 - **报告格式**: Text、JSON、HTML
 - **全局变量**: 启用（describe、it、expect等）
+- **持久化测试**: 使用 `fake-indexeddb` 提供独立数据库，验证事务和恢复行为；不依赖真实收集端
 
 ### Mock 策略
 - **外部依赖**: 使用 `vi.mock()` 模拟

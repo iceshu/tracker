@@ -3,6 +3,7 @@ import { Breadcrumb } from "../core/breadcrumb";
 import { EVENT_TYPE, PLUGIN_TYPE, STATUS_CODE } from "../core/constant";
 import { _global } from "../core/global";
 import { ReportDataController } from "../core/report";
+import { SessionManager } from "../core/session-manager";
 import { Callback } from "../core/typing";
 import { IOptionsParams } from "../typings/options";
 import { addEventListenerTo, getTimestamp } from "../utils";
@@ -18,6 +19,7 @@ const DEFAULT_MIN_USED_JS_HEAP_SIZE = 512 * MEBIBYTE;
 const DEFAULT_MIN_GROWTH_BYTES = 256 * MEBIBYTE;
 const DEFAULT_MIN_GROWTH_RATIO = 1.5;
 const MAX_RECENT_LONG_TASKS = 5;
+const MAX_RECENT_ACTIVITY = 20;
 // 相邻采样点允许的最大间隔倍率。超过即视为采样断层（标签页切后台/被冻结、
 // 定时器节流、设备休眠），此时窗口不再是一段连续观测：跨断层比较会把
 // 「几小时前的那个点」当成基线，把一次跨时段的对比误判成「持续增长」
@@ -25,6 +27,7 @@ const MEMORY_SAMPLE_GAP_TOLERANCE = 2;
 const MEMORY_REPORT_SESSION_KEY = "tc_tracker_memory_anomaly_reported";
 
 export const MEMORY_ANOMALY_EVENT_NAME = "memoryAnomaly";
+export const MEMORY_DIAGNOSTIC_SNAPSHOT_EVENT_NAME = "memoryDiagnosticSnapshot";
 
 interface BrowserMemory {
   jsHeapSizeLimit: number;
@@ -97,9 +100,11 @@ export class PerformancePlugin implements IPluginParams {
   breadcrumb: Breadcrumb;
   reportData: ReportDataController;
   private loadHandler: (() => void) | null = null;
+  private unsubscribeRecoveredReports: (() => void) | null = null;
   private memoryConfig: MemoryMonitorConfig | null = null;
   private memoryTimer: number | null = null;
   private memorySamples: Array<MemorySample> = [];
+  // One attempt per instance; only an acknowledged send persists the session marker.
   private memoryReported = false;
   private sessionStartedAt = getTimestamp();
   private initialDomDiagnostics: DomDiagnostics | null = null;
@@ -122,6 +127,16 @@ export class PerformancePlugin implements IPluginParams {
     // 与 History/Request 插件一致：重复 setup 不得叠加监听器与采样定时器链
     if (this.isSetup) return;
     this.isSetup = true;
+    this.unsubscribeRecoveredReports = this.reportData.onRecoveredReport((data) => {
+      if (!this.isSetup || data.name !== MEMORY_ANOMALY_EVENT_NAME) return;
+      try {
+        if (data.sessionID !== SessionManager.getSessionId()) return;
+        this.memoryReported = true;
+        this.persistMemoryReportMarker();
+      } catch {
+        // Unavailable session storage must not interrupt recovery or sampling.
+      }
+    });
     this.getSourceData();
     this.getPerformanceData();
     this.startMemoryMonitoring();
@@ -182,12 +197,11 @@ export class PerformancePlugin implements IPluginParams {
 
   private startMemoryMonitoring(): void {
     this.memoryConfig = this.createMemoryConfig();
-    if (
-      !this.memoryConfig ||
-      this.wasMemoryAnomalyReportedInSession()
-    ) {
+    if (!this.memoryConfig) {
       return;
     }
+    this.memoryReported =
+      this.memoryReported || this.wasMemoryAnomalyReportedInSession();
 
     const memory = this.readBrowserMemory();
     if (!memory) {
@@ -257,7 +271,7 @@ export class PerformancePlugin implements IPluginParams {
   }
 
   private addMemorySample(memory: BrowserMemory): void {
-    if (!this.memoryConfig || this.memoryReported) {
+    if (!this.isSetup || !this.memoryConfig) {
       return;
     }
 
@@ -277,13 +291,28 @@ export class PerformancePlugin implements IPluginParams {
       this.memorySamples.shift();
     }
 
-    const trend = this.getExtremeMemoryTrend();
-    if (trend) {
-      this.reportMemoryAnomaly(trend);
-      return;
+    try {
+      const trend =
+        !this.memoryReported && !this.wasMemoryAnomalyReportedInSession()
+          ? this.getExtremeMemoryTrend()
+          : null;
+      const shouldSaveSnapshot = this.options.recovery?.enabled !== false;
+      if (shouldSaveSnapshot || trend) {
+        // DOM/context collection runs at most once per existing sampling tick.
+        const diagnostics = this.collectMemoryDiagnostics();
+        if (!this.isSetup) return;
+        if (shouldSaveSnapshot) {
+          void this.saveMemoryDiagnosticSnapshot(diagnostics);
+        }
+        if (trend) {
+          this.reportMemoryAnomaly(trend, diagnostics);
+        }
+      }
+    } catch {
+      // Optional diagnostics must not interrupt the sampling chain or the app.
+    } finally {
+      this.scheduleNextMemorySample();
     }
-
-    this.scheduleNextMemorySample();
   }
 
   /**
@@ -304,12 +333,13 @@ export class PerformancePlugin implements IPluginParams {
   }
 
   private scheduleNextMemorySample(): void {
-    if (!this.memoryConfig || this.memoryReported) {
+    if (!this.isSetup || !this.memoryConfig) {
       return;
     }
 
     this.memoryTimer = _global.setTimeout(() => {
       this.memoryTimer = null;
+      if (!this.isSetup) return;
       if (_global.document.visibilityState === "hidden") {
         this.scheduleNextMemorySample();
         return;
@@ -380,19 +410,17 @@ export class PerformancePlugin implements IPluginParams {
     };
   }
 
-  private reportMemoryAnomaly(trend: MemoryTrend): void {
+  private reportMemoryAnomaly(
+    trend: MemoryTrend,
+    diagnostics: Record<string, unknown>
+  ): void {
     if (this.memoryReported) {
       return;
     }
     this.memoryReported = true;
-    this.persistMemoryReportMarker();
-    if (this.memoryTimer !== null) {
-      _global.clearTimeout(this.memoryTimer);
-      this.memoryTimer = null;
-    }
 
     const currentMemory = this.memorySamples[this.memorySamples.length - 1];
-    this.reportData.send({
+    void this.reportData.send({
       type: EVENT_TYPE.PERFORMANCE,
       name: MEMORY_ANOMALY_EVENT_NAME,
       status: STATUS_CODE.ERROR,
@@ -408,29 +436,60 @@ export class PerformancePlugin implements IPluginParams {
           ...trend,
           samples: this.memorySamples.map((sample) => ({ ...sample })),
         },
-        diagnostics: {
-          sessionDurationMs: getTimestamp() - this.sessionStartedAt,
-          document: {
-            initial: this.initialDomDiagnostics,
-            current: this.collectDomDiagnostics(),
-          },
-          device: {
-            deviceMemory: (
-              _global.navigator as Navigator & { deviceMemory?: number }
-            ).deviceMemory,
-            hardwareConcurrency: _global.navigator.hardwareConcurrency,
-          },
-          longTasks: {
-            count: this.longTaskCount,
-            totalDuration: this.longTaskTotalDuration,
-            maxDuration: this.longTaskMaxDuration,
-            recent: this.recentLongTasks.map((task) => ({ ...task })),
-          },
-          recentActivity: this.collectRecentActivity(),
-          application: this.collectApplicationContext(),
-        },
+        diagnostics,
       },
+    }).then((acknowledged) => {
+      if (acknowledged === true) {
+        this.persistMemoryReportMarker();
+      }
+    }).catch(() => {
+      // Keep the snapshot and allow a new instance to detect an unconfirmed event.
     });
+  }
+
+  private async saveMemoryDiagnosticSnapshot(
+    diagnostics: Record<string, unknown>
+  ): Promise<void> {
+    if (!this.isSetup) return;
+    try {
+      await this.reportData.saveDiagnosticSnapshot({
+        type: EVENT_TYPE.PERFORMANCE,
+        name: MEMORY_DIAGNOSTIC_SNAPSHOT_EVENT_NAME,
+        status: STATUS_CODE.OK,
+        time: getTimestamp(),
+        message: "上次运行的内存诊断快照，不证明发生 crash、OOM 或异常退出",
+        data: {
+          samples: this.memorySamples.map((sample) => ({ ...sample })),
+          diagnostics,
+        },
+      });
+    } catch {
+      // Persistence is best effort and must never stop future samples.
+    }
+  }
+
+  private collectMemoryDiagnostics(): Record<string, unknown> {
+    return {
+      sessionDurationMs: getTimestamp() - this.sessionStartedAt,
+      document: {
+        initial: this.initialDomDiagnostics,
+        current: this.collectDomDiagnostics(),
+      },
+      device: {
+        deviceMemory: (
+          _global.navigator as Navigator & { deviceMemory?: number }
+        ).deviceMemory,
+        hardwareConcurrency: _global.navigator.hardwareConcurrency,
+      },
+      longTasks: {
+        count: this.longTaskCount,
+        totalDuration: this.longTaskTotalDuration,
+        maxDuration: this.longTaskMaxDuration,
+        recent: this.recentLongTasks.map((task) => ({ ...task })),
+      },
+      recentActivity: this.collectRecentActivity(),
+      application: this.collectApplicationContext(),
+    };
   }
 
   private collectDomDiagnostics(): DomDiagnostics {
@@ -445,7 +504,7 @@ export class PerformancePlugin implements IPluginParams {
   }
 
   private collectRecentActivity(): Array<RecentActivity> {
-    return this.breadcrumb.getStack().map((item) => {
+    return this.breadcrumb.getStack().slice(-MAX_RECENT_ACTIVITY).map((item) => {
       const activity: RecentActivity = {
         type: item.type,
         status: item.status,
@@ -543,6 +602,9 @@ export class PerformancePlugin implements IPluginParams {
   }
 
   destroy() {
+    this.isSetup = false;
+    this.unsubscribeRecoveredReports?.();
+    this.unsubscribeRecoveredReports = null;
     if (this.loadHandler) {
       _global.removeEventListener("load", this.loadHandler);
       this.loadHandler = null;
@@ -557,7 +619,6 @@ export class PerformancePlugin implements IPluginParams {
     }
     this.memorySamples = [];
     this.recentLongTasks = [];
-    this.isSetup = false;
   }
 }
 

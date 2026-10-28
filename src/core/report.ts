@@ -1,4 +1,3 @@
-import { Queue } from "./queue";
 import { Global } from "./global";
 import { generateUUID, getLocationHref, isEmpty } from "../utils";
 import { EVENT_TYPE, SDK } from "./constant";
@@ -7,71 +6,131 @@ import { ISendData, ReportData } from "./typing";
 import { IPluginParams } from "../plugins/common";
 import { IOptionsParams } from "../typings/options";
 import { SessionManager } from "./session-manager";
+import { DeliveryStore, StoredEvent } from "./delivery-store";
+
+interface PageIdentity {
+  ownerId: string;
+  snapshotId: string;
+  snapshotRevisions: Map<string, number>;
+  tab: Promise<{ id: string; canRecover: boolean } | undefined>;
+}
+
+// Shared by every controller (and SDK copy) in this document, never by a new page.
+const pageIdentityKey = Symbol.for("tc-tracker.delivery-page");
+function getPageIdentity(): PageIdentity | undefined {
+  // Frames share sessionStorage with the top page but must not replace its tab token.
+  if (window.top !== window) return;
+  const page = document as Document & { [pageIdentityKey]?: PageIdentity };
+  if (page[pageIdentityKey]) return page[pageIdentityKey]!;
+  const identity: PageIdentity = {
+    ownerId: generateUUID(),
+    snapshotId: generateUUID(),
+    snapshotRevisions: new Map(),
+    tab: Promise.resolve(undefined),
+  };
+  page[pageIdentityKey] = identity;
+  const acquireTab = (): PageIdentity["tab"] => new Promise((resolve) => {
+    try {
+      if (typeof navigator.locks?.request !== "function") { resolve(undefined); return; }
+      const key = "tc-tracker.delivery-tab";
+      let id = sessionStorage.getItem(key) || generateUUID();
+      sessionStorage.setItem(key, id);
+      const claim = (tabId: string, recover: boolean, canRekey = true) => {
+        void navigator.locks.request(`tc-tracker.delivery-tab:${tabId}`, { ifAvailable: true }, (lock) => {
+          if (!lock) {
+            if (!canRekey) { resolve(undefined); return; }
+            id = generateUUID();
+            try { sessionStorage.setItem(key, id); } catch { resolve(undefined); return; }
+            claim(id, false, false);
+            return;
+          }
+          resolve({ id: tabId, canRecover: recover });
+          // Keep the tab identity exclusive while its document is alive.
+          return new Promise<void>((release) => {
+            window.addEventListener("pagehide", () => release(), { once: true });
+          });
+        }).catch(() => resolve(undefined));
+      };
+      claim(id, true);
+    } catch { resolve(undefined); }
+  });
+  identity.tab = acquireTab();
+  window.addEventListener("pageshow", (event) => {
+    if (!(event as PageTransitionEvent).persisted) return;
+    // A cached page may resume after its old snapshot was already delivered.
+    // Treat resumed sampling as a new snapshot lifetime and reclaim the tab lock.
+    identity.snapshotId = generateUUID();
+    identity.tab = acquireTab();
+  });
+  return identity;
+}
+
 export class ReportDataController {
-  queue: Queue = new Queue(); // 消息队列
-  apikey = ""; // 每个项目对应的唯一标识
-  dsn = ""; // 监控上报接口的地址
-  userId = ""; // 用户id
-  uuid: string; // 每次页面加载的唯一标识
-  beforeDataReport: any; // 上报数据前的hook
-  getUserId: any; // 用户自定义获取userId的方法
-  useImgUpload = false; // 是否使用图片打点上报
+  apikey = "";
+  dsn = "";
+  userId = "";
+  uuid: string;
+  beforeDataReport: any;
+  getUserId: any;
   breadcrumb: Breadcrumb;
   options: IOptionsParams;
   baseDeviceInfo = {};
+  private readonly store?: DeliveryStore;
+  private readonly scope: string;
+  private readonly page?: PageIdentity;
+  private storageWork: Promise<unknown> = Promise.resolve();
+  private deliveryWork: Promise<unknown> = Promise.resolve();
+  private readonly deliveries = new Map<string, Promise<boolean>>();
+  private recoveryStarted = false;
+  private stopped = false;
+  private abortRequest?: () => void;
+  private readonly pendingPreparations = new Set<() => void>();
+  private readonly recoveredListeners = new Set<(data: ReportData) => void>();
 
   constructor(params: Omit<IPluginParams, "reportData">) {
     const { options, breadcrumb, baseDeviceInfo } = params;
     this.breadcrumb = breadcrumb;
     this.uuid = generateUUID();
     this.dsn = options.dsn;
-    this.apikey = options?.apikey || "";
+    this.apikey = options.apikey || "";
     this.options = options;
-    this.getUserId = options?.getUserId;
+    this.getUserId = options.getUserId;
     this.baseDeviceInfo = baseDeviceInfo;
-    this.beforeDataReport = options?.beforeDataReport;
-  }
-  beacon(url: string, json: any): boolean {
-    const data = new Blob([JSON.stringify(json)], {
-      type: "application/json",
-    });
-    return navigator.sendBeacon(url, data);
-  }
-  imgRequest(data: ReportData, url: string): void {
-    const sendData = (imageUrl: string) => {
-      const image = new Image();
-      image.src = imageUrl;
-    };
-    sendData(
-      `${url}${url.includes("?") ? "&" : "?"}data=${encodeURIComponent(
-        JSON.stringify(data)
-      )}`
-    );
-    this.queue.addFn(sendData);
+    this.beforeDataReport = options.beforeDataReport;
+    this.scope = JSON.stringify([this.dsn, this.apikey]);
+    if (options.recovery?.enabled !== false) {
+      this.store = new DeliveryStore(this.scope, options.recovery);
+      try { this.page = getPageIdentity(); } catch { /* No browser storage context. */ }
+    }
   }
 
-  async beforePost(this: any, data: ISendData): Promise<ReportData | boolean> {
-    let transportData = this.getTransportData(data);
-    // 配置了beforeDataReport
-    if (typeof this.beforeDataReport === "function") {
-      transportData = this.beforeDataReport(transportData);
-      if (!transportData) return false;
-    }
-    return transportData;
+  // Queue recovery before plugins can save/send. The predicate runs after registration.
+  startRecovery(restoreDiagnostics: boolean | (() => boolean) = false): void {
+    if (!this.store || this.recoveryStarted || this.stopped || !this.dsn) return;
+    this.recoveryStarted = true;
+    this.storageWork = this.storageWork.then(async () => {
+      const enabled = typeof restoreDiagnostics === "function" ? restoreDiagnostics() : restoreDiagnostics;
+      const tab = enabled && this.options.memoryMonitor?.enabled
+        ? await this.page?.tab : undefined;
+      if (this.stopped) return;
+      const rows = await this.store!.recover(tab?.canRecover ? tab.id : undefined, this.page?.ownerId);
+      for (const row of rows) {
+        void this.deliver(row, () => {
+          let data: ReportData;
+          try { data = JSON.parse(row.payload); } catch { return; }
+          for (const listener of this.recoveredListeners) {
+            try { listener(data); } catch { /* Observers must not affect delivery. */ }
+          }
+        });
+      }
+    }).catch(() => { /* Recovery is best effort; new events still send. */ });
   }
-  async xhrPost(data: ReportData, url: string): Promise<void> {
-    const requestFun = () => {
-      fetch(`${url}`, {
-        method: "POST",
-        body: JSON.stringify(data),
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-    };
-    this.queue.addFn(requestFun);
+
+  onRecoveredReport(listener: (data: ReportData) => void): () => void {
+    if (!this.stopped) this.recoveredListeners.add(listener);
+    return () => { this.recoveredListeners.delete(listener); };
   }
-  // 获取用户信息
+
   getAuthInfo() {
     return {
       userId: this.userId || this.getAuthId() || "",
@@ -79,70 +138,169 @@ export class ReportDataController {
       apikey: this.apikey,
     };
   }
+
   getAuthId(): string | number {
     if (typeof this.getUserId === "function") {
       const id = this.getUserId();
-      if (typeof id === "string" || typeof id === "number") {
-        return id;
-      } else {
-        console.error(
-          `userId: ${id} 期望 string 或 number 类型，但是传入 ${typeof id}`
-        );
-      }
+      if (typeof id === "string" || typeof id === "number") return id;
+      console.error(`userId: ${id} 期望 string 或 number 类型，但是传入 ${typeof id}`);
     }
     return "";
   }
-  // 添加公共信息
-  // 这里不要添加时间戳，比如接口报错，发生的时间和上报时间不一致
+
   getTransportData(data: any): ReportData {
     const info = {
       ...data,
-      userInfo: this.getAuthInfo(), // 获取用户信息
+      userInfo: this.getAuthInfo(),
       uuid: this.uuid,
-      appVersion: this.options?.appVersion, // 引用方应用版本号
+      apiKey: this.apikey,
+      appVersion: this.options.appVersion,
       pageUrl: getLocationHref(),
       deviceInfo: Global.deviceInfo,
       sessionID: SessionManager.getSessionId(),
     };
-
-    // 性能数据、录屏、白屏检测等不需要附带用户行为
-    const excludeBreadcrumb = [
-      EVENT_TYPE.PERFORMANCE,
-      EVENT_TYPE.RECORDSCREEN,
-      EVENT_TYPE.WHITESCREEN,
-    ];
-    if (!excludeBreadcrumb.includes(data.type)) {
-      info.breadcrumb = this.breadcrumb.getStack(); // 获取用户行为栈
+    if (![EVENT_TYPE.PERFORMANCE, EVENT_TYPE.RECORDSCREEN, EVENT_TYPE.WHITESCREEN].includes(data.type)) {
+      info.breadcrumb = this.breadcrumb.getStack();
     }
     return info;
   }
-  // 判断请求是否为SDK配置的接口
+
   isSdkTransportUrl(targetUrl: string): boolean {
     return !!(this.dsn && targetUrl.includes(this.dsn));
   }
+
   isFilterHttpUrl(url: string): boolean {
     return Boolean(this.options.filterXhrUrlRegExp?.test(url));
   }
-  // 上报数据
-  async send(data: ISendData) {
-    const dsn = this.dsn;
-    if (isEmpty(dsn)) {
-      console.error("dsn为空，没有传入监控错误上报的dsn地址，请在init中传入");
-      return;
-    }
-    data.uuid = this.uuid;
-    data.apiKey = this.apikey;
-    data.pageUrl = getLocationHref();
-    const result = (await this.beforePost(data)) as ReportData;
 
-    if (result) {
-      // 优先使用sendBeacon 上报，若数据量大，再使用图片打点上报和fetch上报
-      const value = this.beacon(dsn, result);
-      if (!value) {
-        return this.useImgUpload
-          ? this.imgRequest(result, dsn)
-          : this.xhrPost(result, dsn);
+  private prepare(data: ISendData, id: string): Promise<StoredEvent | undefined> {
+    return new Promise((resolve) => {
+      const finish = (row?: StoredEvent) => {
+        this.pendingPreparations.delete(cancel);
+        resolve(row);
+      };
+      const cancel = () => finish();
+      this.pendingPreparations.add(cancel);
+      const freeze = (value: ReportData | false | null | undefined) => {
+        if (!value || this.stopped) { finish(); return; }
+        const payload = JSON.stringify({ ...value, eventId: id });
+        finish({ id, scope: this.scope, payload, bytes: new Blob([payload]).size, createdAt: Date.now(), kind: "event" });
+      };
+      try {
+        // Hooks receive original types and may sanitize cycles/BigInt before JSON.
+        // Synchronous hooks freeze immediately; async hooks never occupy storageWork.
+        const context = { ...this.getTransportData(data), eventId: id };
+        const filtered = typeof this.beforeDataReport === "function"
+          ? this.beforeDataReport(context) : context;
+        if (filtered && typeof filtered.then === "function") {
+          void Promise.resolve(filtered).then(freeze).catch(() => finish());
+        } else {
+          freeze(filtered);
+        }
+      } catch { finish(); }
+    });
+  }
+
+  async send(data: ISendData): Promise<boolean> {
+    if (this.stopped || isEmpty(this.dsn)) return false;
+    try {
+      const row = await this.prepare(data, generateUUID());
+      if (!row) return false;
+      const work = this.storageWork.then(async () => {
+        if (this.store) {
+          try { await this.store.put(row); } catch { /* Fall back to immediate delivery. */ }
+        }
+        return { delivery: this.deliver(row) };
+      });
+      this.storageWork = work.catch(() => {});
+      const { delivery } = await work;
+      return delivery ? await delivery : false;
+    } catch { return false; }
+  }
+
+  async saveDiagnosticSnapshot(data: ISendData): Promise<void> {
+    if (!this.store || !this.page || this.stopped || !this.dsn) return;
+    const { snapshotId, ownerId, tab: identity } = this.page;
+    const revision = (this.page.snapshotRevisions.get(this.scope) || 0) + 1;
+    this.page.snapshotRevisions.set(this.scope, revision);
+    const row = await this.prepare(data, snapshotId);
+    const tab = await identity;
+    const isCurrent = () => this.page!.snapshotId === snapshotId && this.page!.snapshotRevisions.get(this.scope) === revision;
+    if (this.stopped || !isCurrent()) return;
+    const work = this.storageWork.then(async () => {
+      if (!isCurrent()) return;
+      if (!row || row.bytes > 64 * 1024 || !tab) {
+        await this.store!.remove(snapshotId, isCurrent);
+        return;
       }
-    }
+      row.kind = "snapshot";
+      row.tabId = tab.id;
+      row.ownerId = ownerId;
+      await this.store!.put(row, isCurrent);
+    });
+    this.storageWork = work.catch(() => {});
+    await this.storageWork;
+  }
+
+  async clearDiagnosticSnapshot(): Promise<void> {
+    if (!this.store || !this.page) return;
+    const snapshotId = this.page.snapshotId;
+    const revision = (this.page.snapshotRevisions.get(this.scope) || 0) + 1;
+    this.page.snapshotRevisions.set(this.scope, revision);
+    const isCurrent = () => this.page!.snapshotId === snapshotId && this.page!.snapshotRevisions.get(this.scope) === revision;
+    this.storageWork = this.storageWork.then(() => this.store!.remove(snapshotId, isCurrent)).catch(() => {});
+    await this.storageWork;
+  }
+
+  private deliver(row: StoredEvent, onConfirmed?: () => void): Promise<boolean> {
+    const existing = this.deliveries.get(row.id);
+    if (existing) return existing;
+    const result = this.deliveryWork.then(async () => {
+      if (this.stopped) return false;
+      const confirmed = await this.post(row.payload);
+      if (this.stopped) return false;
+      if (confirmed) onConfirmed?.();
+      if (this.stopped) return false;
+      if (confirmed && this.store) {
+        try { await this.store.remove(row.id); } catch { /* Keep stable id for replay if deletion fails. */ }
+      }
+      return confirmed;
+    }).catch(() => false);
+    this.deliveries.set(row.id, result);
+    this.deliveryWork = result;
+    void result.then(() => { this.deliveries.delete(row.id); });
+    return result;
+  }
+
+  private post(payload: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      const controller = typeof AbortController === "function" ? new AbortController() : undefined;
+      let settled = false;
+      const finish = (success: boolean) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        this.abortRequest = undefined;
+        resolve(success);
+      };
+      const cancel = () => { finish(false); controller?.abort(); };
+      const timer = setTimeout(cancel, 10_000);
+      this.abortRequest = cancel;
+      try {
+        void fetch(this.dsn, {
+          method: "POST",
+          body: payload,
+          headers: { "Content-Type": "application/json" },
+          signal: controller?.signal,
+        }).then((response) => finish(response.ok), () => finish(false));
+      } catch { finish(false); }
+    });
+  }
+
+  destroy(): void {
+    this.stopped = true;
+    this.recoveredListeners.clear();
+    for (const cancel of this.pendingPreparations) cancel();
+    this.abortRequest?.();
   }
 }

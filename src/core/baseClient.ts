@@ -38,6 +38,9 @@ export class BaseBrowserClient {
     Global.options = this.#options;
     Global.breadcrumb = this.#breadcrumb;
     Global.reportData = this.#reportData;
+    this.#reportData.startRecovery(
+      () => this.#registeredPlugins.has(PLUGIN_TYPE.PERFORMANCE_PLUGIN)
+    );
     this.initializePlugins(plugins);
   }
 
@@ -96,6 +99,7 @@ export class BaseBrowserClient {
 
   // 卸载所有插件副作用（监听器、AOP 改写、定时器），供框架卸载时调用
   destroy() {
+    this.#reportData.destroy();
     this.#registeredPlugins.forEach((plugin) => {
       try {
         plugin.destroy?.();
