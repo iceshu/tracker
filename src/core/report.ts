@@ -6,29 +6,58 @@ import { ISendData, ReportData } from "./typing";
 import { IPluginParams } from "../plugins/common";
 import { IOptionsParams } from "../typings/options";
 import { SessionManager } from "./session-manager";
-import { DeliveryStore, StoredEvent } from "./delivery-store";
+import { DeliveryStore, RecoveryOwnership, StoredEvent } from "./delivery-store";
+
+const MAX_IN_FLIGHT = 4;
+const REQUEST_TIMEOUT_MS = 10_000;
+// Browsers cap the summed bodies of in-flight keepalive requests per document at 64 KiB.
+const KEEPALIVE_QUOTA_BYTES = 64 * 1024;
+let keepaliveBytesInFlight = 0;
 
 interface PageIdentity {
   ownerId: string;
+  // Held for the document's life; a free owner lock means its stored events are orphaned.
+  owner: Promise<boolean>;
+  // Event ids this document is posting, shared by every controller in it.
+  active: Set<string>;
   snapshotId: string;
   snapshotRevisions: Map<string, number>;
   tab: Promise<{ id: string; canRecover: boolean } | undefined>;
 }
 
+const ownerLockPrefix = "tc-tracker.delivery-owner:";
+
 // Shared by every controller (and SDK copy) in this document, never by a new page.
 const pageIdentityKey = Symbol.for("tc-tracker.delivery-page");
-function getPageIdentity(): PageIdentity | undefined {
-  // Frames share sessionStorage with the top page but must not replace its tab token.
-  if (window.top !== window) return;
+function getPageIdentity(): PageIdentity {
   const page = document as Document & { [pageIdentityKey]?: PageIdentity };
   if (page[pageIdentityKey]) return page[pageIdentityKey]!;
   const identity: PageIdentity = {
     ownerId: generateUUID(),
+    owner: Promise.resolve(false),
+    active: new Set(),
     snapshotId: generateUUID(),
     snapshotRevisions: new Map(),
     tab: Promise.resolve(undefined),
   };
   page[pageIdentityKey] = identity;
+  const acquireOwner = (): Promise<boolean> => new Promise((resolve) => {
+    try {
+      if (typeof navigator.locks?.request !== "function") { resolve(false); return; }
+      void navigator.locks.request(`${ownerLockPrefix}${identity.ownerId}`, (lock) => {
+        resolve(!!lock);
+        return new Promise<void>((release) => {
+          window.addEventListener("pagehide", () => release(), { once: true });
+        });
+      }).catch(() => resolve(false));
+    } catch { resolve(false); }
+  });
+  identity.owner = acquireOwner();
+  window.addEventListener("pageshow", (event) => {
+    if ((event as PageTransitionEvent).persisted) identity.owner = acquireOwner();
+  });
+  // Frames share sessionStorage with the top page but must not replace its tab token.
+  if (window.top !== window) return identity;
   const acquireTab = (): PageIdentity["tab"] => new Promise((resolve) => {
     try {
       if (typeof navigator.locks?.request !== "function") { resolve(undefined); return; }
@@ -79,11 +108,12 @@ export class ReportDataController {
   private readonly scope: string;
   private readonly page?: PageIdentity;
   private storageWork: Promise<unknown> = Promise.resolve();
-  private deliveryWork: Promise<unknown> = Promise.resolve();
+  private running = 0;
+  private readonly waiting: Array<() => void> = [];
   private readonly deliveries = new Map<string, Promise<boolean>>();
   private recoveryStarted = false;
   private stopped = false;
-  private abortRequest?: () => void;
+  private readonly abortRequests = new Set<() => void>();
   private readonly pendingPreparations = new Set<() => void>();
   private readonly recoveredListeners = new Set<(data: ReportData) => void>();
 
@@ -100,7 +130,7 @@ export class ReportDataController {
     this.scope = JSON.stringify([this.dsn, this.apikey]);
     if (options.recovery?.enabled !== false) {
       this.store = new DeliveryStore(this.scope, options.recovery);
-      try { this.page = getPageIdentity(); } catch { /* No browser storage context. */ }
+      try { this.page = getPageIdentity(); } catch { /* No browser document context. */ }
     }
   }
 
@@ -113,7 +143,9 @@ export class ReportDataController {
       const tab = enabled && this.options.memoryMonitor?.enabled
         ? await this.page?.tab : undefined;
       if (this.stopped) return;
-      const rows = await this.store!.recover(tab?.canRecover ? tab.id : undefined, this.page?.ownerId);
+      const ownership = await this.probeOwnership();
+      if (this.stopped) return;
+      const rows = await this.store!.recover(tab?.canRecover ? tab.id : undefined, this.page?.ownerId, ownership);
       for (const row of rows) {
         void this.deliver(row, () => {
           let data: ReportData;
@@ -124,6 +156,21 @@ export class ReportDataController {
         });
       }
     }).catch(() => { /* Recovery is best effort; new events still send. */ });
+  }
+
+  // Owners whose lock is free have left; their rows are orphans this document may claim.
+  private async probeOwnership(): Promise<RecoveryOwnership | undefined> {
+    const page = this.page;
+    if (!page || !(await page.owner)) return;
+    const gone = new Set<string>();
+    for (const owner of await this.store!.owners(page.ownerId)) {
+      if (this.stopped) return;
+      try {
+        const free = await navigator.locks.request(`${ownerLockPrefix}${owner}`, { ifAvailable: true }, (lock) => !!lock);
+        if (free) gone.add(owner);
+      } catch { /* Unknown liveness: leave the rows to their owner. */ }
+    }
+    return { gone, active: page.active, claim: true };
   }
 
   onRecoveredReport(listener: (data: ReportData) => void): () => void {
@@ -208,7 +255,12 @@ export class ReportDataController {
       if (!row) return false;
       const work = this.storageWork.then(async () => {
         if (this.store) {
-          try { await this.store.put(row); } catch { /* Fall back to immediate delivery. */ }
+          // Mark before the write so a sibling controller's recovery skips this row.
+          this.page?.active.add(row.id);
+          try {
+            if (this.page && (await this.page.owner)) row.ownerId = this.page.ownerId;
+            await this.store.put(row);
+          } catch { /* Fall back to immediate delivery. */ }
         }
         return { delivery: this.deliver(row) };
       });
@@ -255,42 +307,68 @@ export class ReportDataController {
   private deliver(row: StoredEvent, onConfirmed?: () => void): Promise<boolean> {
     const existing = this.deliveries.get(row.id);
     if (existing) return existing;
-    const result = this.deliveryWork.then(async () => {
-      if (this.stopped) return false;
-      const confirmed = await this.post(row.payload);
-      if (this.stopped) return false;
-      if (confirmed) onConfirmed?.();
-      if (this.stopped) return false;
-      if (confirmed && this.store) {
-        try { await this.store.remove(row.id); } catch { /* Keep stable id for replay if deletion fails. */ }
+    const result = this.acquireSlot().then(async () => {
+      try {
+        if (this.stopped) return false;
+        const confirmed = await this.post(row);
+        if (this.stopped) return false;
+        if (confirmed) onConfirmed?.();
+        if (this.stopped) return false;
+        if (confirmed && this.store) {
+          try { await this.store.remove(row.id); } catch { /* Keep stable id for replay if deletion fails. */ }
+        }
+        return confirmed;
+      } finally {
+        this.releaseSlot();
       }
-      return confirmed;
     }).catch(() => false);
     this.deliveries.set(row.id, result);
-    this.deliveryWork = result;
-    void result.then(() => { this.deliveries.delete(row.id); });
+    void result.then(() => {
+      this.deliveries.delete(row.id);
+      this.page?.active.delete(row.id);
+    });
     return result;
   }
 
-  private post(payload: string): Promise<boolean> {
+  // Bounded parallelism: one slow request must not hold every later event.
+  private acquireSlot(): Promise<void> {
+    if (this.running < MAX_IN_FLIGHT) {
+      this.running++;
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => this.waiting.push(resolve));
+  }
+
+  private releaseSlot(): void {
+    const next = this.waiting.shift();
+    if (next) next();
+    else this.running--;
+  }
+
+  private post(row: StoredEvent): Promise<boolean> {
     return new Promise((resolve) => {
       const controller = typeof AbortController === "function" ? new AbortController() : undefined;
+      // keepalive lets the request outlive pagehide, within the per-document body quota.
+      const keepalive = keepaliveBytesInFlight + row.bytes <= KEEPALIVE_QUOTA_BYTES;
+      if (keepalive) keepaliveBytesInFlight += row.bytes;
       let settled = false;
       const finish = (success: boolean) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        this.abortRequest = undefined;
+        if (keepalive) keepaliveBytesInFlight -= row.bytes;
+        this.abortRequests.delete(cancel);
         resolve(success);
       };
       const cancel = () => { finish(false); controller?.abort(); };
-      const timer = setTimeout(cancel, 10_000);
-      this.abortRequest = cancel;
+      const timer = setTimeout(cancel, REQUEST_TIMEOUT_MS);
+      this.abortRequests.add(cancel);
       try {
         void fetch(this.dsn, {
           method: "POST",
-          body: payload,
+          body: row.payload,
           headers: { "Content-Type": "application/json" },
+          keepalive,
           signal: controller?.signal,
         }).then((response) => finish(response.ok), () => finish(false));
       } catch { finish(false); }
@@ -301,6 +379,6 @@ export class ReportDataController {
     this.stopped = true;
     this.recoveredListeners.clear();
     for (const cancel of this.pendingPreparations) cancel();
-    this.abortRequest?.();
+    for (const cancel of [...this.abortRequests]) cancel();
   }
 }

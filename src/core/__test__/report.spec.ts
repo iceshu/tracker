@@ -106,18 +106,16 @@ describe("acknowledged durable reports", () => {
     expect(await rows()).toEqual([]);
   });
 
-  it("persists later events and snapshots while the first fetch is hung; destroy preserves them", async () => {
+  it("lets later events post while the first fetch is hung; destroy preserves the hung event and snapshot", async () => {
     vi.mocked(fetch).mockImplementationOnce(() => new Promise(() => {}));
     const first = create({ memoryMonitor: { enabled: true } });
     const pending = first.send(event("first"));
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-    const second = first.send(event("second"));
+    expect(await first.send(event("second"))).toBe(true);
     await first.saveDiagnosticSnapshot(event("snapshot"));
-    expect(await rows()).toHaveLength(3);
-    expect(fetch).toHaveBeenCalledOnce();
+    expect(await rows()).toHaveLength(2);
     first.destroy();
     expect(await pending).toBe(false);
-    expect(await second).toBe(false);
     nextDocument();
     create({ memoryMonitor: { enabled: true } }).startRecovery(true);
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(4));
@@ -473,7 +471,8 @@ it("does not let an iframe replace its top-level page's tab identity", async () 
   await frame.saveDiagnosticSnapshot(event("frame snapshot"));
   expect(await frame.send(event("frame ordinary"))).toBe(true);
   expect(sessionStorage.getItem("tc-tracker.delivery-tab")).toBe("top-tab");
-  expect(navigator.locks.request).not.toHaveBeenCalled();
+  expect(vi.mocked(navigator.locks.request).mock.calls.map(([name]) => name)
+    .filter((name) => String(name).startsWith("tc-tracker.delivery-tab"))).toEqual([]);
   expect(await rows()).toEqual([]);
 });
 
@@ -518,4 +517,90 @@ it("freezes synchronous hook output before send returns control to the caller", 
   stack[0].name = "after";
   expect(await pending).toBe(true);
   expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body)).breadcrumb).toEqual([{ name: "before" }]);
+});
+
+describe("cross-document delivery ownership", () => {
+  // Owner locks stay held for the document's life; probes (ifAvailable) and other locks release immediately.
+  function ownerLocks() {
+    const held = new Set<string>();
+    const request = vi.fn((name: string, ...args: unknown[]) => {
+      const callback = args[args.length - 1] as (lock: object | null) => unknown;
+      const options = (args.length > 1 ? args[0] : {}) as { ifAvailable?: boolean };
+      if (held.has(name)) return Promise.resolve(callback(null));
+      held.add(name);
+      const result = Promise.resolve(callback({ name }));
+      if (!name.startsWith("tc-tracker.delivery-owner:") || options.ifAvailable) {
+        void result.then(() => held.delete(name));
+      }
+      return result;
+    });
+    return { request, held };
+  }
+
+  it("does not replay another live document's in-flight event, and replays it once after that document leaves", async () => {
+    const locks = ownerLocks();
+    vi.stubGlobal("navigator", { locks });
+    vi.mocked(fetch).mockImplementationOnce(() => new Promise(() => {}));
+    const a = create();
+    void a.send(event("in flight"));
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    const [stored] = await rows();
+    expect(stored.ownerId).toBeTruthy();
+
+    nextDocument();
+    const b = create();
+    b.startRecovery();
+    expect(await b.send(event("barrier"))).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(2);
+
+    locks.held.delete(`tc-tracker.delivery-owner:${stored.ownerId}`); // document A closed
+    nextDocument();
+    const c = create();
+    c.startRecovery();
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+    await vi.waitFor(async () => expect(await rows()).toEqual([]));
+    const bodies = vi.mocked(fetch).mock.calls.map(([, init]) => JSON.parse(String(init?.body)).name);
+    expect(bodies.filter((name) => name === "in flight")).toHaveLength(2);
+  });
+
+  it("lets only one of two concurrently recovering documents claim an orphaned event", async () => {
+    const locks = ownerLocks();
+    vi.stubGlobal("navigator", { locks });
+    vi.mocked(fetch).mockResolvedValueOnce({ ok: false } as Response);
+    await create().send(event("orphan"));
+    const [stored] = await rows();
+    locks.held.delete(`tc-tracker.delivery-owner:${stored.ownerId}`);
+    nextDocument();
+    const b = create();
+    nextDocument();
+    const c = create();
+    b.startRecovery();
+    c.startRecovery();
+    // Barriers queue behind each controller's recovery step.
+    await Promise.all([b.send(event("b barrier")), c.send(event("c barrier"))]);
+    await vi.waitFor(async () => expect(await rows()).toEqual([]));
+    const replays = vi.mocked(fetch).mock.calls.filter(([, init]) => JSON.parse(String(init?.body)).name === "orphan");
+    expect(replays).toHaveLength(2); // original attempt + exactly one replay
+  });
+});
+
+it("uses keepalive within the 64 KiB in-flight budget and falls back to a normal request beyond it", async () => {
+  vi.mocked(fetch).mockImplementation(() => new Promise(() => {}));
+  const controller = create({ recovery: { enabled: false } });
+  void controller.send(event("small"));
+  void controller.send({ ...event("large"), data: { blob: "x".repeat(70 * 1024) } });
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  const byName = Object.fromEntries(vi.mocked(fetch).mock.calls.map(([, init]) => [JSON.parse(String(init?.body)).name, init?.keepalive]));
+  expect(byName).toEqual({ small: true, large: false });
+});
+
+it("does not let a hung request block later events, and destroy aborts every in-flight request", async () => {
+  vi.mocked(fetch).mockImplementation(() => new Promise(() => {}));
+  const controller = create({ recovery: { enabled: false } });
+  const first = controller.send(event("first"));
+  const second = controller.send(event("second"));
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  controller.destroy();
+  expect(await first).toBe(false);
+  expect(await second).toBe(false);
 });
