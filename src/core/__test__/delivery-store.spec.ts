@@ -61,6 +61,51 @@ describe("bounded atomic delivery storage", () => {
     expect((await store.recover("tab", "next-page"))[0].id).toBe("snapshot");
   });
 
+  it("reports clean snapshot ids deleted by recovery and by retention pruning", async () => {
+    const store = new DeliveryStore("project", { maxAgeMs: 1000 });
+    const now = Date.now();
+    await store.put({
+      ...record("clean", now),
+      kind: "snapshot",
+      ownerId: "old-page",
+      tabId: "tab",
+    });
+    await store.put({
+      ...record("kept", now),
+      kind: "snapshot",
+      ownerId: "old-page",
+      tabId: "other-tab",
+    });
+    // put() 自己会淘汰已过期行，这里直接写入一条已过期快照，确认 recover 的 prune 也会回报它。
+    const inserted = Promise.withResolvers<void>();
+    const request = indexedDB.open("tc-tracker-delivery", 1);
+    request.onerror = () => inserted.reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction("events", "readwrite");
+      tx.objectStore("events").put({
+        ...record("expired-clean", now - 1001),
+        kind: "snapshot",
+        ownerId: "old-page",
+        tabId: "tab",
+      });
+      tx.oncomplete = () => { db.close(); inserted.resolve(); };
+      tx.onabort = () => { db.close(); inserted.reject(tx.error); };
+    };
+    await inserted.promise;
+    const dropped: string[] = [];
+    const recovered = await store.recover(
+      "tab",
+      "new-page",
+      undefined,
+      new Set(["clean", "expired-clean", "kept", "missing"]),
+      dropped
+    );
+    expect(recovered.map((row) => row.id)).toEqual([]);
+    expect(dropped.sort()).toEqual(["clean", "expired-clean"]);
+    expect((await store.recover("other-tab", "new-page")).map((row) => row.id)).toEqual(["kept"]);
+  });
+
   it("rejects an aborted transaction rather than claiming a successful write", async () => {
     const store = new DeliveryStore("project");
     const invalid = record("invalid");

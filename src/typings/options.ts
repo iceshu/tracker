@@ -39,6 +39,7 @@ export interface IOptionsParams {
   memoryMonitor?: MemoryMonitorOptions; // 极端内存增长监控；异常每页尝试一次，确认后会话内不再触发，诊断快照独立恢复
   recovery?: RecoveryOptions;
   wrapElementCallback?: (element: HTMLElement) => void;
+  repeatCodeError?: boolean; // 相同错误只上报一次；默认 true，崩溃统计需要它压制重复噪音
   // 请求错误过滤配置（降噪）
   ignoreErrors?: {
     // 忽略「超时类」错误（Status=0 且耗时达到 requestTimeout*0.95）的 URL 模式列表（如非关键轮询：公告、未读数等）

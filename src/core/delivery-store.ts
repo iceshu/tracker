@@ -129,16 +129,37 @@ export class DeliveryStore {
   }
 
   // Eligibility is re-checked inside the transaction, so two documents racing to
-  // recover the same dead owner's rows cannot both claim them.
-  recover(tabId?: string, ownerId?: string, ownership?: RecoveryOwnership): Promise<StoredEvent[]> {
+  // recover the same dead owner's rows cannot both claim them. Snapshots whose
+  // document exited normally (`cleanSnapshots`) carry no evidence and are deleted.
+  // Deleted ids, including ones removed by retention pruning, are appended to
+  // `droppedCleanIds` so the caller can drop the matching sessionStorage marks.
+  recover(
+    tabId?: string,
+    ownerId?: string,
+    ownership?: RecoveryOwnership,
+    cleanSnapshots: ReadonlySet<string> = new Set(),
+    droppedCleanIds?: string[]
+  ): Promise<StoredEvent[]> {
     return this.transact((rows, store) => {
+      const present = new Set(rows.map((row) => row.id));
       const retained = this.prune(rows, store);
+      const retainedIds = new Set(retained.map((row) => row.id));
+      if (droppedCleanIds) {
+        for (const id of cleanSnapshots) {
+          if (present.has(id) && !retainedIds.has(id)) droppedCleanIds.push(id);
+        }
+      }
       const events: StoredEvent[] = [];
       for (const row of retained) {
         if (row.tabId) {
           // Snapshot-origin rows (promoted or not) stay gated by tab and monitoring opt-in.
           if (!tabId || row.tabId !== tabId || row.ownerId === ownerId) continue;
           if (row.kind === "snapshot") {
+            if (cleanSnapshots.has(row.id)) {
+              store.delete([this.scope, row.id]);
+              droppedCleanIds?.push(row.id);
+              continue;
+            }
             row.kind = "event";
             store.put(row);
           }

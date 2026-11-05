@@ -282,6 +282,84 @@ describe("ErrorPlugin", () => {
       pluginWithRepeat.handleError(mockError);
       expect(mockReportData.send).toHaveBeenCalledTimes(1);
     });
+
+    it("reports Script error. and marks it crossOrigin", () => {
+      errorPlugin.handleError({
+        message: "Script error.",
+        target: null,
+      } as ErrorTarget);
+
+      expect(mockReportData.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: EVENT_TYPE.ERROR,
+          name: "error",
+          data: expect.objectContaining({
+            message: "Script error.",
+            crossOrigin: true,
+          }),
+        })
+      );
+    });
+
+    it("dedupes the same error when repeatCodeError is left at its default", () => {
+      const { repeatCodeError: _ignored, ...options } = mockOptions;
+      const plugin = new ErrorPlugin({
+        options,
+        breadcrumb: mockBreadcrumb,
+        reportData: mockReportData,
+      });
+      const repeated = {
+        message: "Chunk failed",
+        filename: "app.js",
+        lineno: 1,
+        colno: 1,
+        target: null,
+      } as ErrorTarget;
+
+      plugin.handleError(repeated);
+      plugin.handleError(repeated);
+
+      expect(mockReportData.send).toHaveBeenCalledTimes(1);
+    });
+
+    it("reports a code-chunk load failure as an error and leaves images as resources", () => {
+      errorPlugin.handleError({
+        target: {
+          localName: "script",
+          src: "https://cdn.example.com/assets/index-a1b2c3d4.js",
+        },
+      } as ErrorTarget);
+      errorPlugin.handleError({
+        target: {
+          localName: "img",
+          src: "https://cdn.example.com/logo.png",
+        },
+      } as ErrorTarget);
+
+      expect(mockReportData.send).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          type: EVENT_TYPE.ERROR,
+          name: "chunkError",
+          data: expect.objectContaining({
+            isChunk: true,
+            name: "script",
+            url: "https://cdn.example.com/assets/index-a1b2c3d4.js",
+          }),
+        })
+      );
+      expect(mockReportData.send).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          type: EVENT_TYPE.RESOURCE,
+          name: "Resource_Error",
+          data: expect.objectContaining({
+            isChunk: false,
+            name: "img",
+          }),
+        })
+      );
+    });
   });
 
   describe("handleUnhandledRejection", () => {
@@ -438,11 +516,12 @@ describe("Utility Functions", () => {
       } as any;
 
       const result = resourceTransform(target);
-
       expect(result).toEqual({
         time: 1672531200000,
         message: "https://example.com/image.jpg; 资源加载失败",
         name: "img",
+        url: "https://example.com/image.jpg",
+        isChunk: false,
       });
     });
 
@@ -455,11 +534,12 @@ describe("Utility Functions", () => {
       } as any;
 
       const result = resourceTransform(target);
-
       expect(result).toEqual({
         time: 1672531200000,
         message: "https://example.com/style.css; 资源加载失败",
         name: "link",
+        url: "https://example.com/style.css",
+        isChunk: false,
       });
     });
 

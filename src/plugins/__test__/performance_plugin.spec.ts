@@ -53,7 +53,6 @@ function createPlugin(
   const reportData = {
     send,
     saveDiagnosticSnapshot,
-    clearDiagnosticSnapshot: vi.fn().mockResolvedValue(undefined),
     onRecoveredReport: vi.fn((listener: (data: ReportData) => void) => {
       recoveredReportListeners.add(listener);
       return () => { recoveredReportListeners.delete(listener); };
@@ -131,7 +130,6 @@ describe("PerformancePlugin extreme memory monitoring", () => {
     vi.advanceTimersByTime(30_000);
     expect(send).toHaveBeenCalledTimes(1);
     expect(saveSnapshot).toHaveBeenCalledTimes(4);
-    expect(plugin.reportData.clearDiagnosticSnapshot).not.toHaveBeenCalled();
 
     acknowledge(true);
     await vi.waitFor(() => {
@@ -257,7 +255,6 @@ describe("PerformancePlugin extreme memory monitoring", () => {
       expect(send).toHaveBeenCalledTimes(1);
       expect(saveSnapshot).toHaveBeenCalledTimes(6);
       plugin.destroy();
-      expect(plugin.reportData.clearDiagnosticSnapshot).not.toHaveBeenCalled();
 
       usedJSHeapSize = 100;
       const secondSend = vi.fn().mockResolvedValue(true);
@@ -384,7 +381,6 @@ describe("PerformancePlugin extreme memory monitoring", () => {
     vi.advanceTimersByTime(30_000);
     plugin.destroy();
     expect(sessionStorage.getItem(MEMORY_REPORT_SESSION_KEY)).toBeNull();
-    expect(plugin.reportData.clearDiagnosticSnapshot).not.toHaveBeenCalled();
     acknowledge(true);
     finishSnapshot();
     await vi.advanceTimersByTimeAsync(5 * 60_000);

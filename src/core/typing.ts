@@ -36,6 +36,8 @@ export interface ResourceError {
   time: number;
   message: string; // 加载失败的信息
   name: string; // 脚本类型：js脚本
+  url: string; // 失败资源的完整地址，消费端据此判断是哪个构建产物失效
+  isChunk?: boolean; // 是否为代码分块失败；分块失败会直接导致页面崩溃
 }
 
 /**

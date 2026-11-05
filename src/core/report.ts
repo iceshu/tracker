@@ -27,6 +27,32 @@ interface PageIdentity {
 
 const ownerLockPrefix = "tc-tracker.delivery-owner:";
 
+// Snapshots of documents that exited normally (pagehide fired). sessionStorage writes are
+// synchronous, so the mark survives unload even when the async IndexedDB delete does not.
+const cleanSnapshotsKey = "tc-tracker.delivery-clean-snapshots";
+const MAX_CLEAN_SNAPSHOTS = 20;
+function readCleanSnapshots(): string[] {
+  try {
+    const ids: unknown = JSON.parse(sessionStorage.getItem(cleanSnapshotsKey) || "[]");
+    return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : [];
+  } catch { return []; }
+}
+function markSnapshotClean(id: string): void {
+  try {
+    const ids = [...readCleanSnapshots().filter((item) => item !== id), id].slice(-MAX_CLEAN_SNAPSHOTS);
+    sessionStorage.setItem(cleanSnapshotsKey, JSON.stringify(ids));
+  } catch { /* Without the mark the snapshot replays, as before. */ }
+}
+// 快照被真正删除后必须同步摘掉标记，否则这些 id 会在 sessionStorage 里
+// 一直堆积到 MAX_CLEAN_SNAPSHOTS 上限，把仍然有效的标记挤掉。
+function unmarkSnapshotClean(id: string): void {
+  try {
+    const ids = readCleanSnapshots();
+    if (!ids.includes(id)) return;
+    sessionStorage.setItem(cleanSnapshotsKey, JSON.stringify(ids.filter((item) => item !== id)));
+  } catch { /* A stale mark only causes a snapshot to be dropped, never a leak. */ }
+}
+
 // Shared by every controller (and SDK copy) in this document, never by a new page.
 const pageIdentityKey = Symbol.for("tc-tracker.delivery-page");
 function getPageIdentity(): PageIdentity {
@@ -84,9 +110,10 @@ function getPageIdentity(): PageIdentity {
     } catch { resolve(undefined); }
   });
   identity.tab = acquireTab();
+  window.addEventListener("pagehide", () => markSnapshotClean(identity.snapshotId));
   window.addEventListener("pageshow", (event) => {
     if (!(event as PageTransitionEvent).persisted) return;
-    // A cached page may resume after its old snapshot was already delivered.
+    // The pre-cache snapshot lifetime ended cleanly at pagehide.
     // Treat resumed sampling as a new snapshot lifetime and reclaim the tab lock.
     identity.snapshotId = generateUUID();
     identity.tab = acquireTab();
@@ -145,7 +172,16 @@ export class ReportDataController {
       if (this.stopped) return;
       const ownership = await this.probeOwnership();
       if (this.stopped) return;
-      const rows = await this.store!.recover(tab?.canRecover ? tab.id : undefined, this.page?.ownerId, ownership);
+      const droppedCleanIds: string[] = [];
+      const rows = await this.store!.recover(
+        tab?.canRecover ? tab.id : undefined,
+        this.page?.ownerId,
+        ownership,
+        new Set(readCleanSnapshots()),
+        droppedCleanIds
+      );
+      // 事务已经提交删掉的快照才摘标记。提前摘掉会让仍然在库里的正常退出快照被当成 crash 补发。
+      for (const id of droppedCleanIds) unmarkSnapshotClean(id);
       for (const row of rows) {
         void this.deliver(row, () => {
           let data: ReportData;
@@ -283,6 +319,7 @@ export class ReportDataController {
       if (!isCurrent()) return;
       if (!row || row.bytes > 64 * 1024 || !tab) {
         await this.store!.remove(snapshotId, isCurrent);
+        unmarkSnapshotClean(snapshotId);
         return;
       }
       row.kind = "snapshot";
@@ -291,16 +328,6 @@ export class ReportDataController {
       await this.store!.put(row, isCurrent);
     });
     this.storageWork = work.catch(() => {});
-    await this.storageWork;
-  }
-
-  async clearDiagnosticSnapshot(): Promise<void> {
-    if (!this.store || !this.page) return;
-    const snapshotId = this.page.snapshotId;
-    const revision = (this.page.snapshotRevisions.get(this.scope) || 0) + 1;
-    this.page.snapshotRevisions.set(this.scope, revision);
-    const isCurrent = () => this.page!.snapshotId === snapshotId && this.page!.snapshotRevisions.get(this.scope) === revision;
-    this.storageWork = this.storageWork.then(() => this.store!.remove(snapshotId, isCurrent)).catch(() => {});
     await this.storageWork;
   }
 
@@ -315,7 +342,10 @@ export class ReportDataController {
         if (confirmed) onConfirmed?.();
         if (this.stopped) return false;
         if (confirmed && this.store) {
-          try { await this.store.remove(row.id); } catch { /* Keep stable id for replay if deletion fails. */ }
+          try {
+            await this.store.remove(row.id);
+            if (row.kind === "snapshot") unmarkSnapshotClean(row.id);
+          } catch { /* Keep stable id for replay if deletion fails. */ }
         }
         return confirmed;
       } finally {

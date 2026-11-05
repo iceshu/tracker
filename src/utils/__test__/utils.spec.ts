@@ -9,6 +9,7 @@ import {
   isObject,
   getLocationHref,
   replaceAop,
+  isChunkUrl,
 } from "../index";
 
 describe("Utils Functions", () => {
@@ -233,6 +234,30 @@ describe("Utils Functions", () => {
       expect(() => {
         replaceAop(undefined, "method", () => {});
       }).not.toThrow();
+    });
+  });
+
+  describe("isChunkUrl", () => {
+    it("recognizes Next.js chunks and stylesheets on the build CDN", () => {
+      expect(
+        isChunkUrl(
+          "https://ddenxr7gdwm90.cloudfront.net/b/prod/abc1234/_next/static/chunks/main-app.js"
+        )
+      ).toBe(true);
+      expect(
+        isChunkUrl(
+          "https://ddenxr7gdwm90.cloudfront.net/b/prod/abc1234/_next/static/css/app.css"
+        )
+      ).toBe(true);
+    });
+
+    it("leaves images and non-code paths alone", () => {
+      expect(
+        isChunkUrl(
+          "https://ddenxr7gdwm90.cloudfront.net/b/prod/abc1234/_next/static/media/logo.png"
+        )
+      ).toBe(false);
+      expect(isChunkUrl("https://cdn.example.com/images/logo.png")).toBe(false);
     });
   });
 });

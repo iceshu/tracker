@@ -186,7 +186,15 @@ const tracker = TrackInit({
 | `memoryDiagnosticSnapshot` | 启用 `PerformancePlugin` 和 `memoryMonitor.enabled` 后，首个有效内存样本及后续采样更新本页快照，不立即发送；同一标签页下一次启用监控时恢复 |
 | `memoryAnomaly` | 检测到持续极端增长时上报；确认送达后标记本会话已上报，恢复补发的确认同样生效；诊断采样继续进行 |
 
-补发保留事件原来的 `appVersion`、时间、URL、用户、会话和 `eventId`，不会套用新页面的版本或用户信息，也不会再次执行新页面的 `beforeDataReport`。正常刷新、导航、关闭及进程崩溃都可能留下快照；**`memoryDiagnosticSnapshot` 不代表已确认发生 crash 或 OOM**。
+补发保留事件原来的 `appVersion`、时间、URL、用户、会话和 `eventId`，不会套用新页面的版本或用户信息，也不会再次执行新页面的 `beforeDataReport`。正常刷新、导航、关闭及进程崩溃都可能留下快照；**`memoryDiagnosticSnapshot` 不代表已确认发生 crash 或 OOM**。正常退出的快照在下一次恢复时被删除，对应的本地标记也会一并清掉，不会在 `sessionStorage` 里一直堆积。
+
+### 脚本错误与代码分块加载失败
+
+这些事件在页面还活着的时候就上报，不依赖下次刷新，也不依赖 `performance.memory`。
+
+- 跨域脚本执行失败时，浏览器只给出 `Script error.`。SDK 会照常上报，并在 `data.crossOrigin` 为 `true` 时表示这条错误没有堆栈和文件名。`unhandledrejection` 同样处理。
+- `<script>` / `<link>` 加载失败，且地址命中构建产物路径（`/assets/`、`/static/js|css/`、`/_next/static/chunks|css/`、`.chunk.`、带 8 位以上哈希的 `.js` / `.css`）时，按崩溃上报：`type` 为 `error`，`name` 为 `chunkError`。`data.url` 是完整地址，`data.isChunk` 为 `true`。图片、字体等普通资源仍是 `type: resource`、`name: Resource_Error`。
+- `repeatCodeError` 默认按开启处理：同一类型、同一消息、同一位置的错误只上报一次。显式传 `repeatCodeError: false` 才会每次都报。资源加载失败不走这个去重。
 
 ### 容量、隐私与兼容边界
 

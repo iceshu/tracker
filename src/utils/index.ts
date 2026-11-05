@@ -44,6 +44,27 @@ export function addEventListenerTo(
     console.error(`Failed to add ${eventName} listener:`, error);
   }
 }
+
+// 构建产物常见的代码分块路径特征。命中即认为是一次「代码分块加载失败」——
+// 这类失败会让页面渲染中断，比图片/字体等普通资源失败严重得多。
+const CHUNK_URL_PATTERNS = [
+  /\/assets?\//i,
+  /\/static\/(?:js|css)\//i,
+  /\/_next\/static\/(?:chunks|css)\//i,
+  /\.chunk\.[a-z0-9]+\.[a-z0-9]+$/i,
+  /-[a-z0-9]{8,}\.(?:js|css)$/i,
+];
+
+/**
+ * 判断一个 URL 是否是构建产物的代码分块
+ * @param url 资源地址
+ * @returns 命中代码分块特征返回 true
+ */
+export function isChunkUrl(url: string | undefined | null): boolean {
+  if (!url) return false;
+  const path = url.split(/[?#]/, 1)[0];
+  return CHUNK_URL_PATTERNS.some((pattern) => pattern.test(path));
+}
 /**
  * 节流函数：在指定时间间隔内只执行一次函数
  * @param fn 需要节流的函数

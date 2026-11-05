@@ -155,7 +155,6 @@ describe("acknowledged durable reports", () => {
     const controller = create({ recovery: { enabled: false } });
     controller.startRecovery(true);
     await controller.saveDiagnosticSnapshot(event());
-    await controller.clearDiagnosticSnapshot();
     expect(await controller.send(event())).toBe(true);
     expect(open).not.toHaveBeenCalled();
   });
@@ -213,8 +212,6 @@ describe("diagnostic snapshot recovery", () => {
     expect(stored[0].id).toBe(original.id);
     expect(JSON.parse(stored[0].payload).name).toBe("latest");
     expect(fetch).not.toHaveBeenCalled();
-    await controller.clearDiagnosticSnapshot();
-    expect(await rows()).toEqual([]);
   });
 
   it("does not recover itself across multiple TrackInit calls in the same document", async () => {
@@ -228,25 +225,25 @@ describe("diagnostic snapshot recovery", () => {
     expect(await rows()).toHaveLength(1);
   });
 
-  it("preserves old snapshots when a new page writes and clears its own; failed promotion stays replayable", async () => {
+  it("preserves old snapshots when a new page writes its own; failed promotion stays replayable", async () => {
     await create().saveDiagnosticSnapshot(event("old snapshot"));
     const [original] = await rows();
     nextDocument();
     const current = create({ memoryMonitor: { enabled: true } });
     await current.saveDiagnosticSnapshot(event("new snapshot"));
-    await current.clearDiagnosticSnapshot();
-    expect(await rows()).toHaveLength(1);
+    expect(await rows()).toHaveLength(2);
     vi.mocked(fetch).mockResolvedValueOnce({ ok: false } as Response);
     current.startRecovery(true);
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-    const [promoted] = await rows();
-    expect(promoted.kind).toBe("event");
-    expect(promoted.payload).toBe(original.payload);
-    current.destroy();
+    expect(vi.mocked(fetch).mock.calls[0][1]?.body).toBe(original.payload);
+    const promoted = (await rows()).find((row) => row.id === original.id);
+    expect(promoted?.kind).toBe("event");
+    current.destroy(); // no pagehide: the current snapshot is an unclean exit too
     nextDocument();
     create({ memoryMonitor: { enabled: true } }).startRecovery(true);
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
-    expect(vi.mocked(fetch).mock.calls[1][1]?.body).toBe(original.payload);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+    const bodies = vi.mocked(fetch).mock.calls.slice(1).map(([, init]) => JSON.parse(String(init?.body)).name);
+    expect(bodies.sort()).toEqual(["new snapshot", "old snapshot"]);
     await vi.waitFor(async () => expect(await rows()).toEqual([]));
   });
 
@@ -476,12 +473,42 @@ it("does not let an iframe replace its top-level page's tab identity", async () 
   expect(await rows()).toEqual([]);
 });
 
-it("recovers same-tab diagnostics after ordinary navigation when Web Locks are available", async () => {
+it("recovers a same-tab snapshot whose document ended without pagehide (crash/kill)", async () => {
   await create().saveDiagnosticSnapshot(event("previous document"));
   nextDocument();
   vi.mocked(performance.getEntriesByType).mockReturnValue([]);
   create({ memoryMonitor: { enabled: true } }).startRecovery(true);
   await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+  await vi.waitFor(async () => expect(await rows()).toEqual([]));
+});
+
+it("deletes, without sending, the snapshot of a document that exited normally via pagehide", async () => {
+  await create().saveDiagnosticSnapshot(event("previous document"));
+  window.dispatchEvent(new Event("pagehide"));
+  expect(JSON.parse(sessionStorage.getItem("tc-tracker.delivery-clean-snapshots") || "[]")).toHaveLength(1);
+  nextDocument();
+  const current = create({ memoryMonitor: { enabled: true } });
+  current.startRecovery(true);
+  expect(await current.send(event("barrier"))).toBe(true);
+  const names = vi.mocked(fetch).mock.calls.map(([, init]) => JSON.parse(String(init?.body)).name);
+  expect(names).toEqual(["barrier"]);
+  expect(await rows()).toEqual([]);
+  expect(JSON.parse(sessionStorage.getItem("tc-tracker.delivery-clean-snapshots") || "[]")).toEqual([]);
+});
+
+it("still replays the snapshot taken after a BFCache resume when that lifetime ends uncleanly", async () => {
+  const controller = create();
+  await controller.saveDiagnosticSnapshot(event("before cache"));
+  for (const type of ["pagehide", "pageshow"]) {
+    const transition = new Event(type);
+    Object.defineProperty(transition, "persisted", { value: true });
+    window.dispatchEvent(transition);
+  }
+  await controller.saveDiagnosticSnapshot(event("after cache"));
+  nextDocument();
+  create({ memoryMonitor: { enabled: true } }).startRecovery(true);
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+  expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body)).name).toBe("after cache");
   await vi.waitFor(async () => expect(await rows()).toEqual([]));
 });
 
